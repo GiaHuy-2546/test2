@@ -1,0 +1,18 @@
+{
+  "name": "valorant-banpick",
+  "version": "1.0.0",
+  "description": "Ung dung ban pick Valorant",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.22.1",
+    "socket.io": "^4.8.3"
+  },
+  "type": "commonjs"
+}

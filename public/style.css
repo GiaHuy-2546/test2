@@ -1,0 +1,380 @@
+:root {
+  --red: #ff4655;
+  --dark: #0f1923;
+  --white: #ece8e1;
+  --bg-dark: #1f2731;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Kanit", sans-serif;
+}
+
+body {
+  background-color: var(--dark);
+  /* Bạn nhớ thay link ảnh nền nếu muốn */
+  background-image: url("https://media.valorant-api.com/maps/2bee0dc9-4ffe-519b-1cbd-7fbe763a6047/splash.png");
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: multiply;
+  color: var(--white);
+  height: 100vh;
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.hidden {
+  display: none !important;
+}
+.hl-red {
+  color: var(--red);
+  font-weight: 900;
+}
+
+/* HEADER */
+.header-section {
+  height: 80px;
+  background: rgba(0, 0, 0, 0.9);
+  border-bottom: 2px solid var(--red);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+}
+.ban-side {
+  display: flex;
+  gap: 5px;
+  min-width: 100px;
+  justify-content: center;
+}
+.ban-slot {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #555;
+  background-size: cover;
+  position: relative;
+  filter: grayscale(100%);
+}
+.ban-slot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom right,
+    transparent 45%,
+    var(--red) 45%,
+    var(--red) 55%,
+    transparent 55%
+  );
+}
+.vs-logo {
+  margin: 0 20px;
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--red);
+}
+
+/* MAIN BODY */
+.main-body {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* SCREENS */
+.center-screen {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.box-card {
+  background: var(--bg-dark);
+  padding: 40px;
+  border: 1px solid #555;
+  text-align: center;
+}
+.box-card input {
+  display: block;
+  margin: 20px 0;
+  padding: 10px;
+  width: 100%;
+  text-align: center;
+}
+
+.full-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* LOBBY */
+.top-controls {
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: space-between;
+}
+.teams-wrapper {
+  flex: 1;
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  overflow-y: auto;
+}
+.team-col {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 15px;
+}
+.defend-col {
+  border-top: 4px solid #4da6ff;
+}
+.attack-col {
+  border-top: 4px solid #ff4655;
+}
+.team-col ul li {
+  list-style: none;
+  padding: 10px;
+  border-bottom: 1px solid #333;
+}
+
+/* VOTE MAP */
+.title {
+  text-align: center;
+  margin: 20px 0;
+}
+.grid-container {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  padding: 20px;
+  overflow-y: auto;
+}
+.map-card {
+  height: 120px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-color: #333;
+  transition: 0.2s;
+}
+.map-card:hover {
+  border-color: var(--red);
+  transform: scale(1.05);
+}
+.map-card span {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  text-align: center;
+  padding: 5px;
+  font-weight: bold;
+}
+.bottom-bar {
+  padding: 20px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* GAME BOARD (Sửa lỗi hiển thị) */
+.status-bar {
+  text-align: center;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 1.2rem;
+}
+
+.game-board {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  padding: 20px 40px;
+  gap: 40px;
+  overflow-y: auto;
+}
+
+.team-roster {
+  width: 45%; /* Chia đôi màn hình rõ ràng */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.player-card {
+  height: 80px;
+  background: rgba(255, 255, 255, 0.1);
+  border-left: 4px solid #555;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+.player-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+.p-info {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.p-name {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+.h-name {
+  font-size: 1.2rem;
+  color: var(--red);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+/* FOOTER */
+.footer-controls {
+  height: 80px;
+  background: var(--dark);
+  border-top: 1px solid #333;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  flex-shrink: 0;
+}
+
+/* BUTTONS */
+button {
+  cursor: pointer;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+.btn-primary {
+  background: var(--red);
+  color: white;
+  border: none;
+  padding: 10px 25px;
+  clip-path: polygon(
+    10px 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0 100%,
+    0 10px
+  );
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+}
+.btn-primary:disabled {
+  background: #555;
+  cursor: not-allowed;
+  transform: none;
+}
+.btn-secondary {
+  background: transparent;
+  border: 1px solid white;
+  color: white;
+  padding: 5px 15px;
+}
+.btn-warning {
+  background: #fc0;
+  color: #000;
+  border: none;
+  padding: 10px 25px;
+  clip-path: polygon(
+    10px 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0 100%,
+    0 10px
+  );
+}
+.btn-outline {
+  background: transparent;
+  border: 1px solid #777;
+  color: #aaa;
+  padding: 8px 15px;
+}
+.btn-small {
+  background: var(--red);
+  color: white;
+  border: none;
+  padding: 3px 8px;
+  margin-left: 10px;
+}
+
+/* MODAL */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 99;
+}
+.modal-box {
+  width: 90%;
+  max-width: 900px;
+  height: 80vh;
+  background: var(--bg-dark);
+  border: 2px solid var(--red);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+.hero-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+.hero-select-item {
+  aspect-ratio: 1;
+  border: 2px solid #555;
+  cursor: pointer;
+  background-size: cover;
+}
+.hero-select-item:hover {
+  border-color: white;
+  transform: scale(1.1);
+}
+.hero-select-item.selected {
+  border-color: var(--red);
+  box-shadow: 0 0 15px var(--red);
+}
+.hero-select-item.disabled {
+  filter: grayscale(100%);
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+.modal-btns {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

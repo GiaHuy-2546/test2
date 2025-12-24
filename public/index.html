@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VALORANT LEAGUE</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script src="/socket.io/socket.io.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <div id="ban-header" class="header-section hidden">
+        <div class="ban-side" id="ban-list-left"></div>
+        <div class="vs-logo">VS</div>
+        <div class="ban-side" id="ban-list-right"></div>
+      </div>
+
+      <div class="main-body">
+        <div id="login-screen" class="center-screen">
+          <div class="box-card">
+            <h1>NHẬP TÊN</h1>
+            <input
+              type="text"
+              id="username"
+              placeholder="Codename..."
+              autocomplete="off"
+            />
+            <button class="btn-primary" onclick="joinGame()">THAM GIA</button>
+          </div>
+        </div>
+
+        <div id="lobby-screen" class="full-screen hidden">
+          <div class="top-controls">
+            <button id="mode-btn" class="btn-outline" onclick="toggleMode()">
+              MODE: STANDARD
+            </button>
+            <div class="actions">
+              <button class="btn-secondary" onclick="randomize()">
+                TRỘN TEAM
+              </button>
+              <button class="btn-primary" onclick="startMapVote()">
+                VOTE MAP
+              </button>
+            </div>
+          </div>
+          <div class="teams-wrapper">
+            <div class="team-col defend-col">
+              <h2>
+                DEFEND
+                <button class="btn-small" onclick="joinTeam('defend')">
+                  JOIN
+                </button>
+              </h2>
+              <ul id="defend-list"></ul>
+            </div>
+            <div class="team-col attack-col">
+              <h2>
+                ATTACK
+                <button class="btn-small" onclick="joinTeam('attack')">
+                  JOIN
+                </button>
+              </h2>
+              <ul id="attack-list"></ul>
+            </div>
+          </div>
+        </div>
+
+        <div id="vote-screen" class="full-screen hidden">
+          <h2 class="title">CHỌN BẢN ĐỒ</h2>
+          <div id="map-list" class="grid-container"></div>
+          <div class="bottom-bar">
+            <button class="btn-primary" onclick="finishMapVote()">
+              CHỐT KẾT QUẢ
+            </button>
+          </div>
+        </div>
+
+        <div id="game-screen" class="full-screen hidden">
+          <div class="status-bar">
+            MAP: <span id="map-name" class="hl-red">...</span> |
+            <span id="phase-info">LOADING...</span>
+          </div>
+
+          <div class="game-board">
+            <div class="team-roster" id="defend-display"></div>
+
+            <div class="team-roster" id="attack-display"></div>
+          </div>
+
+          <div class="footer-controls">
+            <button
+              id="open-pick-btn"
+              class="btn-primary hidden"
+              onclick="openSelectionModal()"
+            >
+              CHỌN TƯỚNG
+            </button>
+            <button
+              id="finalize-btn"
+              class="btn-warning hidden"
+              onclick="finalizeFun()"
+            >
+              CÔNG BỐ
+            </button>
+            <button class="btn-outline danger" onclick="resetGame()">
+              RESET
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="selection-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+          <h2>
+            CHỌN AGENT <span id="modal-action-text" class="hl-red"></span>
+          </h2>
+          <div id="hero-grid" class="hero-scroll"></div>
+          <div class="modal-btns">
+            <button class="btn-secondary" onclick="closeSelectionModal()">
+              ĐÓNG
+            </button>
+            <button
+              id="confirm-hero-btn"
+              class="btn-primary"
+              disabled
+              onclick="confirmSelection()"
+            >
+              XÁC NHẬN
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="client.js"></script>
+  </body>
+</html>
