@@ -3,6 +3,7 @@
   --dark: #0f1923;
   --white: #ece8e1;
   --bg-dark: #1f2731;
+  --defend-color: #4da6ff;
 }
 
 * {
@@ -14,14 +15,12 @@
 
 body {
   background-color: var(--dark);
-  /* Bạn nhớ thay link ảnh nền nếu muốn */
-  background-image: url("https://media.valorant-api.com/maps/2bee0dc9-4ffe-519b-1cbd-7fbe763a6047/splash.png");
-  background-size: cover;
-  background-position: center;
-  background-blend-mode: multiply;
   color: var(--white);
   height: 100vh;
   overflow: hidden;
+  background-image: url("https://media.valorant-api.com/maps/2bee0dc9-4ffe-519b-1cbd-7fbe763a6047/splash.png");
+  background-size: cover;
+  background-blend-mode: multiply;
 }
 
 #app {
@@ -37,21 +36,165 @@ body {
   font-weight: 900;
 }
 
-/* HEADER */
-.header-section {
-  height: 80px;
-  background: rgba(0, 0, 0, 0.9);
-  border-bottom: 2px solid var(--red);
+/* UTILS */
+.btn-primary {
+  background: var(--red);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.btn-warning {
+  background: #fc0;
+  color: black;
+  border: none;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.btn-secondary {
+  background: transparent;
+  border: 1px solid white;
+  color: white;
+  padding: 5px 15px;
+  cursor: pointer;
+}
+.btn-outline {
+  background: transparent;
+  border: 1px solid #777;
+  color: #aaa;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.btn-small {
+  font-size: 0.8rem;
+  padding: 2px 5px;
+  margin-left: 10px;
+  cursor: pointer;
+}
+
+/* SCREENS */
+.center-screen {
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  flex-shrink: 0;
+}
+.full-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* LOGIN & LOBBY */
+.box-card {
+  background: var(--bg-dark);
+  padding: 40px;
+  border: 1px solid #555;
+  text-align: center;
+}
+.box-card input {
+  display: block;
+  margin: 20px 0;
+  padding: 10px;
+  width: 100%;
+  text-align: center;
+}
+
+.top-controls {
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: space-between;
+}
+.teams-wrapper {
+  flex: 1;
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  overflow-y: auto;
+}
+.team-col {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 15px;
+}
+.defend-col {
+  border-top: 4px solid var(--defend-color);
+}
+.attack-col {
+  border-top: 4px solid var(--red);
+}
+.team-col ul li {
+  list-style: none;
+  padding: 10px;
+  border-bottom: 1px solid #333;
+}
+
+/* MAP VOTE */
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.map-card {
+  height: 100px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  background-size: cover;
+  position: relative;
+  background-color: #333;
+}
+.map-card:hover {
+  border-color: var(--red);
+  transform: scale(1.05);
+}
+.map-card span {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  text-align: center;
+  font-weight: bold;
+}
+.bottom-bar {
+  padding: 20px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.9);
+}
+
+/* --- GAME SCREEN --- */
+.game-header {
+  height: 60px;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid #444;
+}
+.header-center {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.ban-bar {
+  height: 60px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(15, 25, 35, 0.95);
+  border-bottom: 1px solid #444;
 }
 .ban-side {
   display: flex;
   gap: 5px;
-  min-width: 100px;
-  justify-content: center;
 }
 .ban-slot {
   width: 40px;
@@ -73,256 +216,140 @@ body {
     transparent 55%
   );
 }
-.vs-logo {
-  margin: 0 20px;
-  font-size: 2rem;
+.vs-text {
   font-weight: 900;
-  color: var(--red);
+  color: #777;
+  margin: 0 20px;
+  letter-spacing: 2px;
 }
 
-/* MAIN BODY */
-.main-body {
+.draft-container {
   flex: 1;
-  position: relative;
   display: flex;
-  flex-direction: column;
   overflow: hidden;
 }
 
-/* SCREENS */
-.center-screen {
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.box-card {
-  background: var(--bg-dark);
-  padding: 40px;
-  border: 1px solid #555;
-  text-align: center;
-}
-.box-card input {
-  display: block;
-  margin: 20px 0;
-  padding: 10px;
-  width: 100%;
-  text-align: center;
-}
-
-.full-screen {
-  flex: 1;
+/* 2 SIDE COLUMNS */
+.team-column {
+  width: 250px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  height: 100%;
-}
-
-/* LOBBY */
-.top-controls {
-  padding: 15px;
   background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: space-between;
-}
-.teams-wrapper {
-  flex: 1;
-  display: flex;
-  gap: 20px;
-  padding: 20px;
-  overflow-y: auto;
-}
-.team-col {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 15px;
-}
-.defend-col {
-  border-top: 4px solid #4da6ff;
-}
-.attack-col {
-  border-top: 4px solid #ff4655;
-}
-.team-col ul li {
-  list-style: none;
   padding: 10px;
-  border-bottom: 1px solid #333;
-}
-
-/* VOTE MAP */
-.title {
-  text-align: center;
-  margin: 20px 0;
-}
-.grid-container {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 15px;
-  padding: 20px;
   overflow-y: auto;
 }
-.map-card {
-  height: 120px;
-  border: 2px solid transparent;
-  cursor: pointer;
-  position: relative;
-  background-size: cover;
-  background-position: center;
-  background-color: #333;
-  transition: 0.2s;
-}
-.map-card:hover {
-  border-color: var(--red);
-  transform: scale(1.05);
-}
-.map-card span {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  background: rgba(0, 0, 0, 0.8);
+.team-title {
   text-align: center;
-  padding: 5px;
-  font-weight: bold;
-}
-.bottom-bar {
-  padding: 20px;
-  text-align: center;
-  background: rgba(0, 0, 0, 0.8);
-}
-
-/* GAME BOARD (Sửa lỗi hiển thị) */
-.status-bar {
-  text-align: center;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.6);
-  font-size: 1.2rem;
-}
-
-.game-board {
-  flex: 1;
-  display: flex;
-  justify-content: space-between;
-  padding: 20px 40px;
-  gap: 40px;
-  overflow-y: auto;
-}
-
-.team-roster {
-  width: 45%; /* Chia đôi màn hình rõ ràng */
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.player-card {
-  height: 80px;
-  background: rgba(255, 255, 255, 0.1);
-  border-left: 4px solid #555;
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  background-size: cover;
-  background-position: center;
-  position: relative;
-}
-.player-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-}
-.p-info {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.p-name {
   font-size: 1.5rem;
-  font-weight: bold;
-}
-.h-name {
-  font-size: 1.2rem;
-  color: var(--red);
+  margin-bottom: 15px;
   font-weight: 900;
   text-transform: uppercase;
 }
+.defend-side .team-title {
+  color: var(--defend-color);
+}
+.attack-side .team-title {
+  color: var(--red);
+}
 
-/* FOOTER */
-.footer-controls {
-  height: 80px;
-  background: var(--dark);
-  border-top: 1px solid #333;
+.roster-list {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 15px;
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 8px;
 }
 
-/* BUTTONS */
-button {
-  cursor: pointer;
-  text-transform: uppercase;
+/* PLAYER CARD - FULL BACKGROUND */
+.player-card {
+  height: 80px; /* Tăng chiều cao để nhìn rõ hơn */
+  background: #222; /* Màu nền dự phòng */
+  border-left: 4px solid #555;
+  background-size: cover;
+  background-position: center top; /* Căn agent vào giữa mặt */
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  transition: 0.3s;
+}
+.player-info {
+  width: 100%;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.9),
+    transparent
+  ); /* Gradient text dễ đọc */
+  padding: 5px 10px;
   font-weight: bold;
+  font-size: 1.1rem;
+  text-shadow: 1px 1px 2px black;
 }
-.btn-primary {
-  background: var(--red);
+
+/* CENTER GRID - ẢNH TO & CĂN CHỈNH */
+.center-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  background: rgba(20, 20, 20, 0.7);
+  position: relative;
+}
+.hero-grid-display {
+  display: grid;
+  /* Tăng kích thước tối thiểu từ 60px lên 100px */
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 15px;
+  width: 100%;
+  max-width: 900px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* ITEM GRID */
+.hero-select-item {
+  aspect-ratio: 1;
+  border: 1px solid #444;
+  cursor: pointer;
+  background-size: cover; /* Ảnh full ô */
+  background-position: center top; /* Căn vào mặt agent */
+  transition: 0.1s;
+  position: relative;
+  overflow: hidden;
+}
+.hero-select-item:hover {
+  transform: scale(1.1);
+  z-index: 10;
+  border-color: white;
+}
+.hero-select-item.selected {
+  border: 3px solid var(--white);
+  box-shadow: 0 0 15px var(--white);
+}
+.hero-select-item.disabled {
+  filter: grayscale(100%);
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+/* TÊN AGENT BÊN DƯỚI */
+.hero-name-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.8);
   color: white;
-  border: none;
-  padding: 10px 25px;
-  clip-path: polygon(
-    10px 0,
-    100% 0,
-    100% calc(100% - 10px),
-    calc(100% - 10px) 100%,
-    0 100%,
-    0 10px
-  );
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 3px 0;
+  text-transform: uppercase;
 }
-.btn-primary:hover {
-  transform: translateY(-2px);
-}
-.btn-primary:disabled {
-  background: #555;
-  cursor: not-allowed;
-  transform: none;
-}
-.btn-secondary {
-  background: transparent;
-  border: 1px solid white;
-  color: white;
-  padding: 5px 15px;
-}
-.btn-warning {
-  background: #fc0;
-  color: #000;
-  border: none;
-  padding: 10px 25px;
-  clip-path: polygon(
-    10px 0,
-    100% 0,
-    100% calc(100% - 10px),
-    calc(100% - 10px) 100%,
-    0 100%,
-    0 10px
-  );
-}
-.btn-outline {
-  background: transparent;
-  border: 1px solid #777;
-  color: #aaa;
-  padding: 8px 15px;
-}
-.btn-small {
-  background: var(--red);
-  color: white;
-  border: none;
-  padding: 3px 8px;
-  margin-left: 10px;
+
+.lock-btn {
+  width: 200px;
+  margin-top: 10px;
+  font-size: 1.2rem;
+  box-shadow: 0 0 15px rgba(255, 70, 85, 0.4);
 }
 
 /* MODAL */
@@ -335,46 +362,46 @@ button {
   align-items: center;
   z-index: 99;
 }
-.modal-box {
-  width: 90%;
-  max-width: 900px;
-  height: 80vh;
+.small-box {
   background: var(--bg-dark);
-  border: 2px solid var(--red);
+  border: 2px solid var(--defend-color);
   padding: 20px;
-  display: flex;
-  flex-direction: column;
+  width: 400px;
+  text-align: center;
 }
-.hero-scroll {
-  flex: 1;
-  overflow-y: auto;
+.enemy-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
-  padding: 10px;
+  margin: 20px 0;
 }
-.hero-select-item {
-  aspect-ratio: 1;
-  border: 2px solid #555;
+.enemy-btn {
+  padding: 15px;
+  background: #333;
+  border: 1px solid #555;
+  color: white;
   cursor: pointer;
-  background-size: cover;
+  transition: 0.2s;
 }
-.hero-select-item:hover {
+.enemy-btn:hover {
+  background: #555;
   border-color: white;
-  transform: scale(1.1);
 }
-.hero-select-item.selected {
-  border-color: var(--red);
-  box-shadow: 0 0 15px var(--red);
+/* Hiệu ứng người đang đến lượt pick */
+.picking-active {
+  box-shadow: 0 0 15px #fc0;
+  border-left: 4px solid #fc0;
+  animation: pulse 1.5s infinite;
 }
-.hero-select-item.disabled {
-  filter: grayscale(100%);
-  opacity: 0.2;
-  cursor: not-allowed;
-}
-.modal-btns {
-  margin-top: 20px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 10px #fc0;
+  }
+  50% {
+    box-shadow: 0 0 25px #fc0;
+  }
+  100% {
+    box-shadow: 0 0 10px #fc0;
+  }
 }

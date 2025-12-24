@@ -13,12 +13,6 @@
   </head>
   <body>
     <div id="app">
-      <div id="ban-header" class="header-section hidden">
-        <div class="ban-side" id="ban-list-left"></div>
-        <div class="vs-logo">VS</div>
-        <div class="ban-side" id="ban-list-right"></div>
-      </div>
-
       <div class="main-body">
         <div id="login-screen" class="center-screen">
           <div class="box-card">
@@ -80,57 +74,62 @@
         </div>
 
         <div id="game-screen" class="full-screen hidden">
-          <div class="status-bar">
-            MAP: <span id="map-name" class="hl-red">...</span> |
-            <span id="phase-info">LOADING...</span>
+          <div class="game-header">
+            <div class="header-left">
+              MAP: <span id="map-name" class="hl-red">...</span>
+            </div>
+            <div class="header-center" id="phase-info">LOADING...</div>
+            <div class="header-right">
+              <button
+                id="finalize-btn"
+                class="btn-warning hidden"
+                onclick="finalizeFun()"
+              >
+                CÔNG BỐ
+              </button>
+              <button class="btn-outline danger" onclick="resetGame()">
+                RESET
+              </button>
+            </div>
           </div>
 
-          <div class="game-board">
-            <div class="team-roster" id="defend-display"></div>
-
-            <div class="team-roster" id="attack-display"></div>
+          <div class="ban-bar">
+            <div id="ban-list-left" class="ban-side"></div>
+            <div class="vs-text">BANNED</div>
+            <div id="ban-list-right" class="ban-side"></div>
           </div>
 
-          <div class="footer-controls">
-            <button
-              id="open-pick-btn"
-              class="btn-primary hidden"
-              onclick="openSelectionModal()"
-            >
-              CHỌN TƯỚNG
-            </button>
-            <button
-              id="finalize-btn"
-              class="btn-warning hidden"
-              onclick="finalizeFun()"
-            >
-              CÔNG BỐ
-            </button>
-            <button class="btn-outline danger" onclick="resetGame()">
-              RESET
-            </button>
-          </div>
-        </div>
-      </div>
+          <div class="draft-container">
+            <div class="team-column defend-side">
+              <h2 class="team-title">DEFEND</h2>
+              <div id="defend-display" class="roster-list"></div>
+            </div>
 
-      <div id="selection-modal" class="modal-overlay hidden">
-        <div class="modal-box">
-          <h2>
-            CHỌN AGENT <span id="modal-action-text" class="hl-red"></span>
-          </h2>
-          <div id="hero-grid" class="hero-scroll"></div>
-          <div class="modal-btns">
-            <button class="btn-secondary" onclick="closeSelectionModal()">
-              ĐÓNG
-            </button>
-            <button
-              id="confirm-hero-btn"
-              class="btn-primary"
-              disabled
-              onclick="confirmSelection()"
-            >
-              XÁC NHẬN
-            </button>
+            <div class="center-column">
+              <div id="hero-grid" class="hero-grid-display"></div>
+              <button
+                id="lock-in-btn"
+                class="btn-primary lock-btn hidden"
+                onclick="confirmStandardSelection()"
+              >
+                KHOÁ CHỌN
+              </button>
+            </div>
+
+            <div class="team-column attack-side">
+              <h2 class="team-title">ATTACK</h2>
+              <div id="attack-display" class="roster-list"></div>
+            </div>
+          </div>
+
+          <div id="enemy-selector-modal" class="modal-overlay hidden">
+            <div class="modal-box small-box">
+              <h3>CHỌN ĐỐI THỦ ĐỂ GÁN AGENT:</h3>
+              <div id="enemy-list" class="enemy-grid"></div>
+              <button class="btn-secondary" onclick="closeEnemyModal()">
+                HỦY
+              </button>
+            </div>
           </div>
         </div>
       </div>

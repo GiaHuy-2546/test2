@@ -9,8 +9,6 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// --- DANH SÁCH MAP ---
-// "Random" là lựa chọn đặc biệt
 const REAL_MAPS = [
   "Ascent",
   "Bind",
@@ -29,28 +27,78 @@ const MAP_OPTIONS = [...REAL_MAPS, "Random"];
 let gameState = {
   phase: "LOBBY",
   users: [],
-
-  // Logic Vote Map Mới
-  mapVotes: {}, // {MapName: số_lượng_vote}
-  userMapVotes: {}, // {SocketID: 'MapName'} -> Để biết user đang vote map nào
+  mapVotes: {},
+  userMapVotes: {},
   selectedMap: null,
-
   mode: "STANDARD",
   bans: [],
   picks: {},
-  turn: { team: "defend", action: "BAN", count: 0 },
   funPicks: {},
+  completedFunPicks: [],
+  // Logic Turn mới: Sử dụng Queue
+  turnIndex: 0,
+  turnQueue: [], // Mảng chứa các object { team: 'defend'/'attack', action: 'BAN'/'PICK', memberIndex: 0/1/2... }
 };
 
+function generateTurnQueue(defendCount, attackCount) {
+  let queue = [];
+
+  // Giai đoạn BAN: Mỗi bên ban 1 lượt (Ví dụ: Defend -> Attack -> Defend -> Attack...)
+  // Giả sử mỗi bên ban 3 lượt (tổng 6)
+  for (let i = 0; i < 3; i++) {
+    queue.push({ team: "defend", action: "BAN", memberIndex: null }); // Ban thì ai trong team ban cũng đc (hoặc quy định đội trưởng)
+    queue.push({ team: "attack", action: "BAN", memberIndex: null });
+  }
+
+  // Giai đoạn PICK: Pick theo thứ tự 1-2-2-2-2-1 hoặc 1-1-1-1... tuỳ luật.
+  // Ở đây làm đơn giản: Defend 1 -> Attack 1 -> Defend 2 -> Attack 2...
+  const max = Math.max(defendCount, attackCount);
+  for (let i = 0; i < max; i++) {
+    if (i < defendCount)
+      queue.push({ team: "defend", action: "PICK", memberIndex: i });
+    if (i < attackCount)
+      queue.push({ team: "attack", action: "PICK", memberIndex: i });
+  }
+
+  return queue;
+}
+
+// Reset toàn bộ
+function resetToLobby(forceReload = false) {
+  gameState.phase = "LOBBY";
+  gameState.bans = [];
+  gameState.picks = {};
+  gameState.funPicks = {};
+  gameState.completedFunPicks = [];
+  gameState.mapVotes = {};
+  gameState.userMapVotes = {};
+  gameState.selectedMap = null;
+  gameState.turnIndex = 0;
+  gameState.turnQueue = [];
+
+  gameState.users.forEach((u) => {
+    u.hero = null;
+    u.team = null;
+  });
+
+  if (forceReload) {
+    io.emit("forceReload"); // Lệnh bắt client F5
+  } else {
+    io.emit("updateState", gameState);
+  }
+}
+
 io.on("connection", (socket) => {
-  // 1. Join
   socket.on("join", (name) => {
+    // Nếu game đang chạy mà có người mới vào -> Reset để tránh lỗi
+    if (gameState.phase !== "LOBBY") {
+      resetToLobby(true);
+    }
     const user = { id: socket.id, name, team: null, hero: null };
     gameState.users.push(user);
     io.emit("updateState", gameState);
   });
 
-  // 2. Join Team
   socket.on("joinTeam", (team) => {
     const user = gameState.users.find((u) => u.id === socket.id);
     if (user) user.team = team;
@@ -70,141 +118,128 @@ io.on("connection", (socket) => {
     io.emit("updateState", gameState);
   });
 
-  // 3. Map Vote (LOGIC MỚI: CHO PHÉP ĐỔI VOTE)
   socket.on("startMapVote", () => {
     gameState.phase = "MAP_VOTE";
     gameState.mapVotes = {};
-    gameState.userMapVotes = {}; // Reset ai vote gì
     MAP_OPTIONS.forEach((m) => (gameState.mapVotes[m] = 0));
     io.emit("updateState", gameState);
   });
 
   socket.on("voteMap", (mapName) => {
     if (gameState.mapVotes[mapName] === undefined) return;
-
-    // Nếu user đã vote trước đó -> Trừ vote cũ đi
     const oldVote = gameState.userMapVotes[socket.id];
-    if (oldVote) {
-      gameState.mapVotes[oldVote]--;
-    }
-
-    // Cộng vote mới
+    if (oldVote) gameState.mapVotes[oldVote]--;
     gameState.mapVotes[mapName]++;
-    gameState.userMapVotes[socket.id] = mapName; // Lưu lại lựa chọn mới
-
+    gameState.userMapVotes[socket.id] = mapName;
     io.emit("updateState", gameState);
   });
 
   socket.on("finishMapVote", () => {
+    // Xử lý map thắng
     let max = -1;
     let winner = REAL_MAPS[0];
-
-    // Tìm map thắng cử
     for (const [map, count] of Object.entries(gameState.mapVotes)) {
       if (count > max) {
         max = count;
         winner = map;
-      } else if (count === max) {
-        // Nếu bằng phiếu thì random giữa các map bằng phiếu (hoặc ưu tiên cái nào cũng đc)
       }
     }
+    gameState.selectedMap =
+      winner === "Random"
+        ? REAL_MAPS[Math.floor(Math.random() * REAL_MAPS.length)]
+        : winner;
 
-    // Xử lý nếu winner là "Random" -> Chọn 1 map thật
-    if (winner === "Random") {
-      const randomIndex = Math.floor(Math.random() * REAL_MAPS.length);
-      gameState.selectedMap = REAL_MAPS[randomIndex];
-    } else {
-      gameState.selectedMap = winner;
-    }
+    // --- KHỞI TẠO TURN QUEUE ---
+    const defUsers = gameState.users.filter((u) => u.team === "defend");
+    const attUsers = gameState.users.filter((u) => u.team === "attack");
+    gameState.turnQueue = generateTurnQueue(defUsers.length, attUsers.length);
+    gameState.turnIndex = 0;
 
     gameState.phase = "BAN_PICK";
-    // Reset data game
     gameState.bans = [];
     gameState.picks = {};
     gameState.funPicks = {};
-    gameState.turn = { team: "defend", action: "BAN", count: 0 };
+    gameState.completedFunPicks = [];
+
     io.emit("updateState", gameState);
   });
 
-  // 4. Ban/Pick
-  socket.on("selectHero", (heroName) => {
+  socket.on("selectHero", (data) => {
+    let heroName = data;
+    let targetId = null;
+    if (typeof data === "object") {
+      heroName = data.hero;
+      targetId = data.targetId;
+    }
+
     const user = gameState.users.find((u) => u.id === socket.id);
     if (!user) return;
 
     if (gameState.mode === "STANDARD") {
       handleStandardMode(user, heroName);
     } else {
-      handleFunMode(user, heroName);
+      if (targetId) handleFunMode(user, heroName, targetId);
     }
   });
 
   function handleStandardMode(user, heroName) {
-    const { team, action } = gameState.turn;
-    if (action === "BAN" && user.team === team) {
+    const currentTurn = gameState.turnQueue[gameState.turnIndex];
+    if (!currentTurn) return; // Hết lượt
+
+    // 1. Kiểm tra đúng Team
+    if (user.team !== currentTurn.team) return;
+
+    // 2. Kiểm tra đúng người (Nếu là phase PICK)
+    if (currentTurn.action === "PICK") {
+      const teamUsers = gameState.users.filter((u) => u.team === user.team);
+      // Người thứ memberIndex trong danh sách team này mới được pick
+      if (teamUsers[currentTurn.memberIndex].id !== user.id) return;
+    }
+
+    // 3. Xử lý Logic
+    if (currentTurn.action === "BAN") {
       if (!gameState.bans.includes(heroName)) {
         gameState.bans.push(heroName);
-        gameState.turn.count++;
-        gameState.turn.team = team === "defend" ? "attack" : "defend";
-        if (gameState.turn.count >= 6) {
-          // Tổng 6 lượt ban
-          gameState.turn.action = "PICK";
-          gameState.turn.count = 0;
-          gameState.turn.team = "defend";
-        }
-        io.emit("updateState", gameState);
+        nextTurn();
       }
-    } else if (action === "PICK" && user.team === team) {
+    } else if (currentTurn.action === "PICK") {
       const isPicked = Object.values(gameState.picks).includes(heroName);
       const isBanned = gameState.bans.includes(heroName);
       if (!isBanned && !isPicked) {
         gameState.picks[user.id] = heroName;
         user.hero = heroName;
-        gameState.turn.team = team === "defend" ? "attack" : "defend";
-        io.emit("updateState", gameState);
+        nextTurn();
       }
     }
   }
 
-  function handleFunMode(user, heroName) {
-    gameState.funPicks[user.id] = heroName;
+  function nextTurn() {
+    gameState.turnIndex++;
+    if (gameState.turnIndex >= gameState.turnQueue.length) {
+      // Hết lượt -> Có thể chuyển qua phase Ingame hoặc kết thúc
+      // Ở đây mình cứ để im trạng thái cuối
+    }
+    io.emit("updateState", gameState);
+  }
+
+  function handleFunMode(user, heroName, targetId) {
+    gameState.funPicks[targetId] = heroName;
+    if (!gameState.completedFunPicks.includes(user.id)) {
+      gameState.completedFunPicks.push(user.id);
+    }
     io.emit("updateState", gameState);
   }
 
   socket.on("finalizeFunMode", () => {
-    const defendUsers = gameState.users.filter((u) => u.team === "defend");
-    const attackUsers = gameState.users.filter((u) => u.team === "attack");
-    const defendPicks = defendUsers
-      .map((u) => gameState.funPicks[u.id])
-      .filter((x) => x);
-    const attackPicks = attackUsers
-      .map((u) => gameState.funPicks[u.id])
-      .filter((x) => x);
-
-    const shuffle = (arr) => arr.sort(() => Math.random() - 0.5);
-    const shuffledDefPicks = shuffle([...defendPicks]);
-    const shuffledAttPicks = shuffle([...attackPicks]);
-
-    attackUsers.forEach((u, i) => {
-      if (shuffledDefPicks[i]) u.hero = shuffledDefPicks[i];
+    gameState.users.forEach((u) => {
+      if (gameState.funPicks[u.id]) u.hero = gameState.funPicks[u.id];
     });
-    defendUsers.forEach((u, i) => {
-      if (shuffledAttPicks[i]) u.hero = shuffledAttPicks[i];
-    });
-
     gameState.phase = "RESULT";
     io.emit("updateState", gameState);
   });
 
   socket.on("reset", () => {
-    gameState.phase = "LOBBY";
-    gameState.users.forEach((u) => {
-      u.hero = null;
-      u.team = null;
-    });
-    gameState.bans = [];
-    gameState.picks = {};
-    gameState.userMapVotes = {};
-    io.emit("updateState", gameState);
+    resetToLobby(true); // Force reload tất cả
   });
 
   socket.on("setMode", () => {
@@ -213,12 +248,20 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
+    const wasUser = gameState.users.find((u) => u.id === socket.id);
     gameState.users = gameState.users.filter((u) => u.id !== socket.id);
-    io.emit("updateState", gameState);
+
+    // NẾU ĐANG TRONG GAME -> RESET & RELOAD TẤT CẢ
+    if (wasUser && gameState.phase !== "LOBBY") {
+      console.log(`User ${wasUser.name} disconnected. Force resetting...`);
+      resetToLobby(true);
+    } else {
+      io.emit("updateState", gameState);
+    }
   });
 });
 
 const PORT = 3000;
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server chạy tại http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
