@@ -40,24 +40,41 @@ let gameState = {
   turnQueue: [], // Mảng chứa các object { team: 'defend'/'attack', action: 'BAN'/'PICK', memberIndex: 0/1/2... }
 };
 
-function generateTurnQueue(defendCount, attackCount) {
+function generateTurnQueue(defendCount, attackCount, mode) {
   let queue = [];
 
-  // Giai đoạn BAN: Mỗi bên ban 1 lượt (Ví dụ: Defend -> Attack -> Defend -> Attack...)
-  // Giả sử mỗi bên ban 3 lượt (tổng 6)
-  for (let i = 0; i < 3; i++) {
-    queue.push({ team: "defend", action: "BAN", memberIndex: null }); // Ban thì ai trong team ban cũng đc (hoặc quy định đội trưởng)
-    queue.push({ team: "attack", action: "BAN", memberIndex: null });
-  }
+  if (mode === "STANDARD") {
+    // SỐ LƯỢT BAN MỖI ĐỘI (Ví dụ: 3)
+    const BAN_LIMIT = 3;
 
-  // Giai đoạn PICK: Pick theo thứ tự 1-2-2-2-2-1 hoặc 1-1-1-1... tuỳ luật.
-  // Ở đây làm đơn giản: Defend 1 -> Attack 1 -> Defend 2 -> Attack 2...
-  const max = Math.max(defendCount, attackCount);
-  for (let i = 0; i < max; i++) {
-    if (i < defendCount)
-      queue.push({ team: "defend", action: "PICK", memberIndex: i });
-    if (i < attackCount)
-      queue.push({ team: "attack", action: "PICK", memberIndex: i });
+    for (let i = 0; i < BAN_LIMIT; i++) {
+      // Dùng toán tử % để xoay vòng người cấm
+      // Nếu team Defend có người, chia lượt. Nếu không (0 người) thì gán tạm 0 để tránh lỗi NaN
+      let defIndex = defendCount > 0 ? i % defendCount : 0;
+      let attIndex = attackCount > 0 ? i % attackCount : 0;
+
+      queue.push({ team: "defend", action: "BAN", memberIndex: defIndex });
+      queue.push({ team: "attack", action: "BAN", memberIndex: attIndex });
+    }
+
+    // Giai đoạn PICK (Giữ nguyên)
+    const max = Math.max(defendCount, attackCount);
+    for (let i = 0; i < max; i++) {
+      if (i < defendCount)
+        queue.push({ team: "defend", action: "PICK", memberIndex: i });
+      if (i < attackCount)
+        queue.push({ team: "attack", action: "PICK", memberIndex: i });
+    }
+  } else {
+    // --- FUN MODE (Chỉ Chọn) ---
+    // Mỗi người được 1 lượt để chọn tướng cho đối thủ
+    const max = Math.max(defendCount, attackCount);
+    for (let i = 0; i < max; i++) {
+      if (i < defendCount)
+        queue.push({ team: "defend", action: "FUN_PICK", memberIndex: i });
+      if (i < attackCount)
+        queue.push({ team: "attack", action: "FUN_PICK", memberIndex: i });
+    }
   }
 
   return queue;
@@ -101,7 +118,10 @@ io.on("connection", (socket) => {
 
   socket.on("joinTeam", (team) => {
     const user = gameState.users.find((u) => u.id === socket.id);
-    if (user) user.team = team;
+    if (user) {
+      user.team = team;
+      user.teamJoinTime = Date.now();
+    }
     io.emit("updateState", gameState);
   });
 
@@ -152,7 +172,13 @@ io.on("connection", (socket) => {
     // --- KHỞI TẠO TURN QUEUE ---
     const defUsers = gameState.users.filter((u) => u.team === "defend");
     const attUsers = gameState.users.filter((u) => u.team === "attack");
-    gameState.turnQueue = generateTurnQueue(defUsers.length, attUsers.length);
+
+    // Truyền thêm gameState.mode vào
+    gameState.turnQueue = generateTurnQueue(
+      defUsers.length,
+      attUsers.length,
+      gameState.mode
+    );
     gameState.turnIndex = 0;
 
     gameState.phase = "BAN_PICK";
@@ -189,14 +215,19 @@ io.on("connection", (socket) => {
     // 1. Kiểm tra đúng Team
     if (user.team !== currentTurn.team) return;
 
-    // 2. Kiểm tra đúng người (Nếu là phase PICK)
-    if (currentTurn.action === "PICK") {
-      const teamUsers = gameState.users.filter((u) => u.team === user.team);
-      // Người thứ memberIndex trong danh sách team này mới được pick
-      if (teamUsers[currentTurn.memberIndex].id !== user.id) return;
+    // 2. Kiểm tra đúng người (Member Index)
+    // Lấy danh sách user của team hiện tại
+    const teamUsers = gameState.users.filter((u) => u.team === user.team);
+
+    // Nếu người gửi request KHÔNG PHẢI là người được chỉ định trong lượt này -> Chặn
+    if (
+      !teamUsers[currentTurn.memberIndex] ||
+      teamUsers[currentTurn.memberIndex].id !== user.id
+    ) {
+      return;
     }
 
-    // 3. Xử lý Logic
+    // 3. Xử lý Logic (Code cũ giữ nguyên logic push vào mảng)
     if (currentTurn.action === "BAN") {
       if (!gameState.bans.includes(heroName)) {
         gameState.bans.push(heroName);
@@ -223,11 +254,31 @@ io.on("connection", (socket) => {
   }
 
   function handleFunMode(user, heroName, targetId) {
+    const currentTurn = gameState.turnQueue[gameState.turnIndex];
+    if (!currentTurn) return; // Hết lượt
+
+    // Kiểm tra đúng Team
+    if (user.team !== currentTurn.team) return;
+
+    // Kiểm tra đúng người (Member Index)
+    const teamUsers = gameState.users.filter((u) => u.team === user.team);
+    if (
+      !teamUsers[currentTurn.memberIndex] ||
+      teamUsers[currentTurn.memberIndex].id !== user.id
+    ) {
+      return;
+    }
+
+    // Logic lưu tướng (Vẫn ẩn trong funPicks, chưa đưa vào user.hero)
     gameState.funPicks[targetId] = heroName;
+
+    // Đánh dấu người này đã chọn xong (để logic client hiển thị)
     if (!gameState.completedFunPicks.includes(user.id)) {
       gameState.completedFunPicks.push(user.id);
     }
-    io.emit("updateState", gameState);
+
+    // Chuyển lượt
+    nextTurn();
   }
 
   socket.on("finalizeFunMode", () => {
@@ -239,7 +290,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("reset", () => {
-    resetToLobby(true); // Force reload tất cả
+    resetToLobby(false); // Force reload tất cả
   });
 
   socket.on("setMode", () => {
@@ -254,7 +305,7 @@ io.on("connection", (socket) => {
     // NẾU ĐANG TRONG GAME -> RESET & RELOAD TẤT CẢ
     if (wasUser && gameState.phase !== "LOBBY") {
       console.log(`User ${wasUser.name} disconnected. Force resetting...`);
-      resetToLobby(true);
+      resetToLobby(false);
     } else {
       io.emit("updateState", gameState);
     }

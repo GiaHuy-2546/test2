@@ -125,6 +125,7 @@ function renderApp(state) {
 
   if (state.phase === "LOBBY") {
     // Reset background về mặc định nếu đang ở Lobby
+    selectedHeroTemp = null;
     document.body.style.backgroundImage = `url("https://media.valorant-api.com/maps/2bee0dc9-4ffe-519b-1cbd-7fbe763a6047/splash.png")`;
 
     document.getElementById("lobby-screen").classList.remove("hidden");
@@ -144,7 +145,18 @@ function renderLobby(users) {
   const aList = document.getElementById("attack-list");
   dList.innerHTML = "";
   aList.innerHTML = "";
-  users.forEach((u) => {
+
+  // --- THÊM ĐOẠN NÀY: Tạo bản sao và sắp xếp theo thời gian Join ---
+  // Logic: Ai có teamJoinTime nhỏ (bấm trước) xếp trước, lớn (bấm sau) xếp sau
+  const sortedUsers = [...users].sort((a, b) => {
+    const timeA = a.teamJoinTime || 0;
+    const timeB = b.teamJoinTime || 0;
+    return timeA - timeB;
+  });
+  // ------------------------------------------------------------------
+
+  // Sửa vòng lặp bên dưới để dùng 'sortedUsers' thay vì 'users'
+  sortedUsers.forEach((u) => {
     const li = document.createElement("li");
     li.innerText = u.name;
     if (u.team === "defend") dList.appendChild(li);
@@ -168,50 +180,51 @@ function renderMapVote(votes) {
 function renderGame(state) {
   document.getElementById("map-name").innerText = state.selectedMap;
   const info = document.getElementById("phase-info");
+  const heroGridContainer = document.getElementById("hero-grid");
+  const finalizeBtn = document.getElementById("finalize-btn");
+  const lockBtn = document.getElementById("lock-in-btn");
 
   const me = state.users.find((u) => u.id === myId);
   myTeam = me ? me.team : null;
   let isMyTurn = false;
   let actionText = "WAITING...";
 
-  document.getElementById("finalize-btn").classList.add("hidden");
-  const lockBtn = document.getElementById("lock-in-btn");
+  // Ẩn mặc định các nút
+  finalizeBtn.classList.add("hidden");
   lockBtn.classList.add("hidden");
 
-  // --- LOGIC HIỂN THỊ TURN (STANDARD) ---
-  if (state.mode === "STANDARD") {
-    const turn = state.turnQueue[state.turnIndex];
-    if (turn) {
-      actionText = `${turn.team.toUpperCase()} - ${turn.action}`;
+  // --- LOGIC TÍNH TOÁN LƯỢT (Dùng chung cho cả Standard và Fun) ---
+  const turn = state.turnQueue[state.turnIndex];
 
-      // Kiểm tra xem có phải lượt của mình không
-      if (turn.team === myTeam) {
-        if (turn.action === "BAN") {
-          isMyTurn = true; // Ai trong team cũng ban được (đơn giản hoá)
-        } else if (turn.action === "PICK") {
-          // Phải đúng người thứ n trong team
-          const myTeamUsers = state.users.filter((u) => u.team === myTeam);
-          if (
-            myTeamUsers[turn.memberIndex] &&
-            myTeamUsers[turn.memberIndex].id === myId
-          ) {
-            isMyTurn = true;
-            actionText += " (BẠN)";
-          } else {
-            const pickerName = myTeamUsers[turn.memberIndex]
-              ? myTeamUsers[turn.memberIndex].name
-              : "...";
-            actionText += ` (${pickerName})`;
-          }
-        }
-      }
+  if (turn) {
+    // Vẫn còn lượt đi -> Đang trong quá trình Ban/Pick
+    const turnTeamUsers = state.users.filter((u) => u.team === turn.team);
+    const activeUser = turnTeamUsers[turn.memberIndex];
+    const activeName = activeUser ? activeUser.name : "...";
 
-      info.innerText = `LƯỢT: ${actionText}`;
-      info.style.color =
-        turn.team === "attack" ? "var(--red)" : "var(--defend-color)";
+    // Xác định Text hiển thị
+    if (state.mode === "STANDARD") {
+      actionText = `${turn.team.toUpperCase()} - ${
+        turn.action
+      } (${activeName})`;
+    } else {
+      // Fun Mode
+      actionText = `GÁN TƯỚNG CHO ĐỐI THỦ (${activeName})`;
+    }
 
-      // Hiện nút Lock nếu đúng lượt
-      if (isMyTurn && selectedHeroTemp) {
+    // Kiểm tra có phải lượt của mình không
+    if (activeUser && activeUser.id === myId) {
+      isMyTurn = true;
+      actionText += " (BẠN)";
+    }
+
+    info.innerText = `LƯỢT: ${actionText}`;
+    info.style.color =
+      turn.team === "attack" ? "var(--red)" : "var(--defend-color)";
+
+    // Hiện nút Lock (Standard) HOẶC Grid (Fun) nếu đúng lượt
+    if (isMyTurn) {
+      if (state.mode === "STANDARD" && selectedHeroTemp) {
         lockBtn.classList.remove("hidden");
         lockBtn.innerText = turn.action === "BAN" ? "CẤM NGAY" : "KHOÁ CHỌN";
         lockBtn.className =
@@ -219,22 +232,41 @@ function renderGame(state) {
             ? "btn-warning lock-btn"
             : "btn-primary lock-btn";
       }
-    } else {
-      info.innerText = "HOÀN TẤT";
+      // Fun mode không dùng nút Lock, mà click vào tướng -> chọn đối thủ -> xong luôn
     }
   } else {
-    // FUN MODE
-    info.innerText = "CHẾ ĐỘ GIẢI TRÍ";
-    const done =
-      state.completedFunPicks && state.completedFunPicks.includes(myId);
-    if (!done) isMyTurn = true;
-    if (state.phase !== "RESULT")
-      document.getElementById("finalize-btn").classList.remove("hidden");
+    // HẾT LƯỢT (Queue đã chạy hết)
+    if (state.mode === "STANDARD") {
+      info.innerText = "HOÀN TẤT";
+    } else {
+      // FUN MODE: Hết lượt chọn -> Hiện nút Công Bố
+      info.innerText = "CHỜ CÔNG BỐ KẾT QUẢ...";
+      if (state.phase !== "RESULT") {
+        finalizeBtn.classList.remove("hidden"); // Hiện nút công bố
+      } else {
+        info.innerText = "KẾT QUẢ";
+      }
+    }
   }
 
-  // --- THAY ĐỔI BACKGROUND NẾU MÌNH ĐÃ PICK ---
+  // --- ẨN/HIỆN DANH SÁCH TƯỚNG ---
+  if (state.phase === "RESULT") {
+    heroGridContainer.classList.add("hidden");
+  } else {
+    // Chỉ hiện Grid khi ĐẾN LƯỢT MÌNH (áp dụng cả 2 mode)
+    if (isMyTurn) {
+      heroGridContainer.classList.remove("hidden");
+      renderHeroGrid(state, isMyTurn);
+    } else {
+      heroGridContainer.classList.add("hidden");
+      // Có thể hiển thị thông báo chờ
+      heroGridContainer.innerHTML = `<div class="waiting-message">VUI LÒNG CHỜ NGƯỜI KHÁC...</div>`;
+    }
+  }
+
+  // ... (Phần render background, ban list, team side giữ nguyên như code trước) ...
+  // Lưu ý: Phần renderTeamSide vẫn dùng logic highlight khung đã làm ở bước trước
   if (state.picks[myId]) {
-    // Tìm ảnh agent và set body background
     getImageUrl("agents", state.picks[myId], (url) => {
       document.body.style.backgroundImage = `url('${url}')`;
       document.body.style.backgroundPosition = "center top";
@@ -243,7 +275,7 @@ function renderGame(state) {
     });
   }
 
-  // RENDER BAN
+  // Render Ban List (Giữ nguyên)
   const leftBan = document.getElementById("ban-list-left");
   const rightBan = document.getElementById("ban-list-right");
   leftBan.innerHTML = "";
@@ -256,19 +288,9 @@ function renderGame(state) {
     else rightBan.appendChild(div);
   });
 
-  // RENDER TEAM
+  // Render Team (Giữ nguyên logic cũ)
   renderTeamSide("defend", state, state.turnQueue[state.turnIndex]);
   renderTeamSide("attack", state, state.turnQueue[state.turnIndex]);
-
-  // RENDER GRID
-  const heroGridContainer = document.getElementById("hero-grid");
-  if (state.phase === "RESULT") {
-    heroGridContainer.classList.add("hidden");
-    lockBtn.classList.add("hidden");
-  } else {
-    heroGridContainer.classList.remove("hidden");
-    renderHeroGrid(state, isMyTurn);
-  }
 }
 
 function renderTeamSide(team, state, currentTurn) {
@@ -280,19 +302,20 @@ function renderTeamSide(team, state, currentTurn) {
     const div = document.createElement("div");
     div.className = "player-card";
 
-    // Highlight người đang pick
+    // LOGIC HIGHLIGHT:
+    // Kiểm tra nếu đúng team VÀ đúng vị trí index (memberIndex)
     if (
       state.mode === "STANDARD" &&
       currentTurn &&
       currentTurn.team === team &&
-      currentTurn.action === "PICK" &&
-      currentTurn.memberIndex === index
+      currentTurn.memberIndex === index // So sánh chính xác index người chơi
     ) {
-      div.classList.add("picking-active");
+      div.classList.add("picking-active"); // Class này đã có trong CSS của bạn
     } else {
       div.classList.remove("picking-active");
     }
 
+    // ... (Phần hiển thị Hero/Tên giữ nguyên như cũ)
     let heroDisplay = "";
     if (state.mode === "STANDARD") {
       if (state.picks[u.id]) heroDisplay = state.picks[u.id];
