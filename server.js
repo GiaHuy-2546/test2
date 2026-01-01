@@ -9,351 +9,410 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, "public")));
 
-const REAL_MAPS = [
-  "Ascent",
-  "Bind",
-  "Haven",
-  "Split",
-  "Icebox",
-  "Breeze",
-  "Fracture",
-  "Pearl",
-  "Lotus",
-  "Sunset",
-  "Abyss",
+// --- DATA ---
+// Cần danh sách có Role ở Server để tính toán logic ưu tiên
+const HERO_DATA = [
+  { name: "Astra", role: "Controller" },
+  { name: "Brimstone", role: "Controller" },
+  { name: "Clove", role: "Controller" },
+  { name: "Harbor", role: "Controller" },
+  { name: "Omen", role: "Controller" },
+  { name: "Viper", role: "Controller" },
+  { name: "Iso", role: "Duelist" },
+  { name: "Jett", role: "Duelist" },
+  { name: "Neon", role: "Duelist" },
+  { name: "Phoenix", role: "Duelist" },
+  { name: "Raze", role: "Duelist" },
+  { name: "Reyna", role: "Duelist" },
+  { name: "Yoru", role: "Duelist" },
+  { name: "Waylay", role: "Duelist" },
+  { name: "Breach", role: "Initiator" },
+  { name: "Fade", role: "Initiator" },
+  { name: "Gekko", role: "Initiator" },
+  { name: "KayO", role: "Initiator" },
+  { name: "Skye", role: "Initiator" },
+  { name: "Sova", role: "Initiator" },
+  { name: "Tejo", role: "Initiator" },
+  { name: "Chamber", role: "Sentinel" },
+  { name: "Cypher", role: "Sentinel" },
+  { name: "Deadlock", role: "Sentinel" },
+  { name: "Killjoy", role: "Sentinel" },
+  { name: "Sage", role: "Sentinel" },
+  { name: "Vise", role: "Sentinel" },
+  { name: "Veto", role: "Sentinel" },
 ];
-const MAP_OPTIONS = [...REAL_MAPS, "Random"];
+const HERO_NAMES = HERO_DATA.map((h) => h.name);
 
+// --- STATE ---
 let gameState = {
-  phase: "LOBBY",
   users: [],
+  phase: "LOBBY", // LOBBY, MAP_VOTE, BAN_PICK, RESULT
+  mode: "STANDARD", // STANDARD, RANDOM_DRAFT (Mới)
   mapVotes: {},
-  userMapVotes: {},
-  selectedMap: null,
-  mode: "STANDARD",
-  bans: [],
-  picks: {},
-  funPicks: {},
-  completedFunPicks: [],
+  selectedMap: "Ascent",
+  turnQueue: [], // { team: 'attack'|'defend', memberIndex: 0, action: 'BAN'|'PICK' }
   turnIndex: 0,
-  turnQueue: [],
+  bans: [],
+  picks: {}, // { userId: heroName }
+  funPicks: {}, // { targetId: heroName } cho chế độ cũ (nếu giữ)
+
+  // State cho chế độ RANDOM_DRAFT
+  draftOptions: {}, // { userId: [HeroA, HeroB] }
+  rerollsUsed: {}, // { userId: true/false }
 };
 
-// ... (Hàm generateTurnQueue giữ nguyên không đổi) ...
-function generateTurnQueue(defendCount, attackCount, mode) {
-  let queue = [];
-  if (mode === "STANDARD") {
-    const BAN_LIMIT = 3; // Ví dụ 3 lượt ban
-    for (let i = 0; i < BAN_LIMIT; i++) {
-      let defIndex = defendCount > 0 ? i % defendCount : 0;
-      let attIndex = attackCount > 0 ? i % attackCount : 0;
-      queue.push({ team: "defend", action: "BAN", memberIndex: defIndex });
-      queue.push({ team: "attack", action: "BAN", memberIndex: attIndex });
+// Cấu hình đội hình chuẩn
+const COMP_TARGET = {
+  Duelist: 2,
+  Sentinel: 1,
+  Controller: 1,
+  Initiator: 1,
+};
+
+// --- HELPER FUNCTIONS ---
+
+function getMissingRoles(teamName) {
+  // Lấy danh sách tướng team đã pick
+  const teamUsers = gameState.users.filter((u) => u.team === teamName);
+  const currentRoles = { Duelist: 0, Sentinel: 0, Controller: 0, Initiator: 0 };
+
+  teamUsers.forEach((u) => {
+    const heroName = gameState.picks[u.id];
+    if (heroName) {
+      const h = HERO_DATA.find((x) => x.name === heroName);
+      if (h && currentRoles[h.role] !== undefined) {
+        currentRoles[h.role]++;
+      }
     }
-    const max = Math.max(defendCount, attackCount);
-    for (let i = 0; i < max; i++) {
-      if (i < defendCount)
-        queue.push({ team: "defend", action: "PICK", memberIndex: i });
-      if (i < attackCount)
-        queue.push({ team: "attack", action: "PICK", memberIndex: i });
+  });
+
+  // Tìm role còn thiếu so với Target
+  const missing = [];
+  for (const [role, count] of Object.entries(COMP_TARGET)) {
+    if (currentRoles[role] < count) {
+      missing.push(role);
     }
-  } else {
-    const max = Math.max(defendCount, attackCount);
-    for (let i = 0; i < max; i++) {
-      if (i < defendCount)
-        queue.push({ team: "defend", action: "FUN_PICK", memberIndex: i });
-      if (i < attackCount)
-        queue.push({ team: "attack", action: "FUN_PICK", memberIndex: i });
+  }
+  return missing;
+}
+
+function generateDraftOptions(userId, existingOptions = []) {
+  const user = gameState.users.find((u) => u.id === userId);
+  if (!user) return ["Jett", "Reyna"]; // Fallback
+
+  const picked = Object.values(gameState.picks);
+  const banned = gameState.bans;
+  const currentOptionsNames = existingOptions; // Những con đang hiện trên màn hình (để tránh random trùng lại)
+
+  // Pool khả dụng: Không bị Ban, không bị Pick, không nằm trong option hiện tại
+  let available = HERO_DATA.filter(
+    (h) =>
+      !picked.includes(h.name) &&
+      !banned.includes(h.name) &&
+      !currentOptionsNames.includes(h.name)
+  );
+
+  const missingRoles = getMissingRoles(user.team);
+
+  // Chia pool thành 2 nhóm: Ưu tiên (Role thiếu) và Còn lại
+  const highPriority = available.filter((h) => missingRoles.includes(h.role));
+  const lowPriority = available.filter((h) => !missingRoles.includes(h.role));
+
+  function pickRandom(count) {
+    const result = [];
+    for (let i = 0; i < count; i++) {
+      // Ưu tiên lấy High Priority trước
+      if (highPriority.length > 0) {
+        const idx = Math.floor(Math.random() * highPriority.length);
+        result.push(highPriority[idx].name);
+        highPriority.splice(idx, 1);
+      } else if (lowPriority.length > 0) {
+        const idx = Math.floor(Math.random() * lowPriority.length);
+        result.push(lowPriority[idx].name);
+        lowPriority.splice(idx, 1);
+      }
     }
+    return result;
+  }
+
+  return pickRandom(existingOptions.length === 1 ? 1 : 2); // Nếu cần 1 thì lấy 1, cần 2 lấy 2
+}
+
+function generateTurnQueue() {
+  const attack = gameState.users.filter((u) => u.team === "attack");
+  const defend = gameState.users.filter((u) => u.team === "defend");
+  const queue = [];
+
+  // PHASE 1: BAN (Giống nhau cho cả 2 chế độ)
+  // Mỗi team ban 1 lượt xen kẽ (giả sử leader hoặc random người ban)
+  // Ở đây giữ logic cũ: Ai cũng có thể click Ban nếu đến lượt team?
+  // Để đơn giản, code cũ hình như không chia lượt Ban cụ thể cho từng người,
+  // mà chia lượt cho TEAM. Nhưng turnQueue cần memberIndex.
+  // Ta sẽ cho người đầu tiên của mỗi team đại diện Ban.
+
+  if (attack.length > 0)
+    queue.push({ team: "attack", memberIndex: 0, action: "BAN" });
+  if (defend.length > 0)
+    queue.push({ team: "defend", memberIndex: 0, action: "BAN" });
+  if (attack.length > 0)
+    queue.push({ team: "attack", memberIndex: 0, action: "BAN" });
+  if (defend.length > 0)
+    queue.push({ team: "defend", memberIndex: 0, action: "BAN" });
+
+  // PHASE 2: PICK
+  const maxLen = Math.max(attack.length, defend.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (i < attack.length)
+      queue.push({ team: "attack", memberIndex: i, action: "PICK" });
+    if (i < defend.length)
+      queue.push({ team: "defend", memberIndex: i, action: "PICK" });
   }
   return queue;
 }
 
-function resetToLobby(forceReload = false) {
-  gameState.phase = "LOBBY";
-  gameState.bans = [];
-  gameState.picks = {};
-  gameState.funPicks = {};
-  gameState.completedFunPicks = [];
-  gameState.mapVotes = {};
-  gameState.userMapVotes = {};
-  gameState.selectedMap = null;
-  gameState.turnIndex = 0;
-  gameState.turnQueue = [];
-  gameState.users.forEach((u) => {
-    u.hero = null;
-    u.team = null;
-  });
-  if (forceReload) io.emit("forceReload");
-  else io.emit("updateState", gameState);
-}
+function checkTurn() {
+  const turn = gameState.turnQueue[gameState.turnIndex];
+  if (!turn) {
+    gameState.phase = "RESULT";
+    io.emit("updateState", gameState);
+    return;
+  }
 
-// --- HÀM XỬ LÝ KẾT THÚC VOTE MAP (Mới) ---
-function finalizeMapSelection() {
-  // Tìm map có số phiếu cao nhất
-  let maxVotes = -1;
-  let candidates = []; // Danh sách các map bằng phiếu nhau cao nhất
-
-  for (const [map, count] of Object.entries(gameState.mapVotes)) {
-    if (count > maxVotes) {
-      maxVotes = count;
-      candidates = [map];
-    } else if (count === maxVotes) {
-      candidates.push(map);
+  // Nếu là chế độ RANDOM_DRAFT và là lượt PICK -> Sinh trước 2 options cho người chơi
+  if (gameState.mode === "RANDOM_DRAFT" && turn.action === "PICK") {
+    const teamUsers = gameState.users.filter((u) => u.team === turn.team);
+    const user = teamUsers[turn.memberIndex];
+    if (user && !gameState.draftOptions[user.id]) {
+      gameState.draftOptions[user.id] = generateDraftOptions(user.id); // Sinh 2 con
     }
   }
-
-  // Nếu không ai vote hoặc lỗi -> Random toàn bộ
-  if (candidates.length === 0) candidates = [...REAL_MAPS];
-
-  // Chọn ngẫu nhiên trong danh sách candidates (Xử lý hòa phiếu)
-  let winner = candidates[Math.floor(Math.random() * candidates.length)];
-
-  // Nếu winner là nút "Random" -> Random lại một lần nữa trong REAL_MAPS
-  if (winner === "Random") {
-    gameState.selectedMap =
-      REAL_MAPS[Math.floor(Math.random() * REAL_MAPS.length)];
-  } else {
-    gameState.selectedMap = winner;
-  }
-
-  // --- KHỞI TẠO TURN QUEUE ---
-  const defUsers = gameState.users.filter((u) => u.team === "defend");
-  const attUsers = gameState.users.filter((u) => u.team === "attack");
-  gameState.turnQueue = generateTurnQueue(
-    defUsers.length,
-    attUsers.length,
-    gameState.mode
-  );
-  gameState.turnIndex = 0;
-  gameState.phase = "BAN_PICK";
-  gameState.bans = [];
-  gameState.picks = {};
-  gameState.funPicks = {};
-  gameState.completedFunPicks = [];
-
-  io.emit("updateState", gameState);
 }
 
+// --- SOCKET ---
 io.on("connection", (socket) => {
-  socket.emit("updateState", gameState); // Gửi state ngay khi connect
+  console.log("User connected:", socket.id);
 
-  socket.on("join", (data) => {
-    // Xử lý tương thích ngược nếu client cũ chỉ gửi string
-    const name = typeof data === "object" ? data.name : data;
-    const token = typeof data === "object" ? data.token : null;
-
-    if (!name || !token) return; // Bắt buộc phải có token (Client mới đã có)
-
-    // 1. Tìm xem tên này đã tồn tại chưa
-    const existingUser = gameState.users.find((u) => u.name === name);
-
-    if (existingUser) {
-      // A. ĐÃ CÓ TÊN NÀY TRONG DANH SÁCH
-
-      // Kiểm tra Token xem có đúng là chủ nhân không
-      if (existingUser.token === token) {
-        // -> ĐÚNG CHỦ (Reconnect)
-        console.log(`User ${name} reconnected (Device Verified)!`);
-        existingUser.id = socket.id; // Cập nhật socket mới
-        socket.emit("updateState", gameState);
-      } else {
-        // -> SAI CHỦ (Người khác cố tình nhập trùng tên)
-        console.log(`Blocked duplicate login attempt for name: ${name}`);
-        socket.emit(
-          "joinError",
-          "Tên này đã có người sử dụng! Vui lòng chọn tên khác."
-        );
-      }
+  socket.on("join", ({ name, token }) => {
+    // Reconnect logic
+    const existing = gameState.users.find((u) => u.token === token);
+    if (existing) {
+      existing.id = socket.id;
+      existing.name = name;
+      existing.active = true;
     } else {
-      // B. NGƯỜI CHƠI MỚI (Chưa có tên trong list)
-      const user = {
+      gameState.users.push({
         id: socket.id,
+        token: token,
         name: name,
-        token: token, // Lưu token lại để so sánh lần sau
         team: null,
         hero: null,
-      };
-      gameState.users.push(user);
-      io.emit("updateState", gameState);
+        active: true,
+      });
     }
+    socket.emit("updateState", gameState);
+    io.emit("updateState", gameState);
   });
 
   socket.on("joinTeam", (team) => {
     const user = gameState.users.find((u) => u.id === socket.id);
-    if (user) {
+    if (user && gameState.phase === "LOBBY") {
       user.team = team;
       user.teamJoinTime = Date.now();
+      io.emit("updateState", gameState);
     }
-    io.emit("updateState", gameState);
   });
 
-  // --- [THÊM MỚI] XỬ LÝ ĐỔI TÊN ---
   socket.on("rename", (newName) => {
-    // 1. Tìm người chơi
     const user = gameState.users.find((u) => u.id === socket.id);
-    if (!user) return;
-
-    // 2. Kiểm tra trùng tên
-    const isNameTaken = gameState.users.find((u) => u.name === newName);
-    if (isNameTaken) {
-      socket.emit("renameError", "Tên này đã có người sử dụng!");
-      return;
+    if (user) {
+      user.name = newName;
+      io.emit("updateState", gameState);
+      socket.emit("renameSuccess", newName);
     }
+  });
 
-    // 3. Đổi tên và báo về
-    user.name = newName;
-    socket.emit("renameSuccess", newName);
+  // --- ADMIN TOOLS ---
+  socket.on("setMode", () => {
+    // Toggle giữa STANDARD và RANDOM_DRAFT
+    gameState.mode =
+      gameState.mode === "STANDARD" ? "RANDOM_DRAFT" : "STANDARD";
     io.emit("updateState", gameState);
   });
 
-  // --- CÁC HÀM ADMIN GỌI ---
   socket.on("randomizeTeams", () => {
-    let users = gameState.users;
+    const users = gameState.users.filter((u) => u.team);
+    // Shuffle
     for (let i = users.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [users[i], users[j]] = [users[j], users[i]];
     }
     const mid = Math.ceil(users.length / 2);
-    users.forEach((u, index) => {
-      u.team = index < mid ? "defend" : "attack";
+    users.forEach((u, idx) => {
+      u.team = idx < mid ? "attack" : "defend";
     });
     io.emit("updateState", gameState);
   });
 
   socket.on("startMapVote", () => {
     gameState.phase = "MAP_VOTE";
-    gameState.mapVotes = {};
-    gameState.userMapVotes = {}; // Reset phiếu user
-    MAP_OPTIONS.forEach((m) => (gameState.mapVotes[m] = 0));
+    gameState.mapVotes = {
+      Ascent: 0,
+      Bind: 0,
+      Haven: 0,
+      Split: 0,
+      Icebox: 0,
+      Breeze: 0,
+      Fracture: 0,
+      Pearl: 0,
+      Lotus: 0,
+      Sunset: 0,
+      Abyss: 0,
+    };
     io.emit("updateState", gameState);
   });
 
   socket.on("voteMap", (mapName) => {
-    if (gameState.mapVotes[mapName] === undefined) return;
-
-    // Logic vote cũ
-    const oldVote = gameState.userMapVotes[socket.id];
-    if (oldVote) gameState.mapVotes[oldVote]--;
-    gameState.mapVotes[mapName]++;
-    gameState.userMapVotes[socket.id] = mapName;
-
-    io.emit("updateState", gameState);
-
-    // --- LOGIC MỚI: Tự động chuyển phase nếu tất cả đã vote ---
-    const totalVotedUsers = Object.keys(gameState.userMapVotes).length;
-    const totalUsers = gameState.users.length;
-
-    // Nếu tất cả mọi người đã vote -> Chốt luôn
-    if (totalUsers > 0 && totalVotedUsers === totalUsers) {
-      // Đợi 1 chút (1s) để client kịp nhìn thấy mình vừa vote rồi mới chuyển
-      setTimeout(() => {
-        // Kiểm tra lại lần nữa phase để tránh conflict
-        if (gameState.phase === "MAP_VOTE") finalizeMapSelection();
-      }, 1000);
+    if (
+      gameState.phase === "MAP_VOTE" &&
+      gameState.mapVotes[mapName] !== undefined
+    ) {
+      gameState.mapVotes[mapName]++;
+      io.emit("updateState", gameState);
     }
   });
 
   socket.on("finishMapVote", () => {
-    // Admin ép dừng
-    finalizeMapSelection();
+    let max = -1;
+    let selected = "Ascent";
+    for (const [m, c] of Object.entries(gameState.mapVotes)) {
+      if (c > max) {
+        max = c;
+        selected = m;
+      }
+    }
+    gameState.selectedMap = selected;
+    gameState.phase = "BAN_PICK";
+    gameState.turnQueue = generateTurnQueue();
+    gameState.turnIndex = 0;
+    gameState.bans = [];
+    gameState.picks = {};
+    gameState.draftOptions = {};
+    gameState.rerollsUsed = {};
+
+    checkTurn();
+    io.emit("updateState", gameState);
   });
 
-  // ... (Phần selectHero, nextTurn, handleFunMode giữ nguyên) ...
+  // --- GAME LOGIC ---
+
+  // Logic Reroll (Chỉ cho RANDOM_DRAFT)
+  socket.on("rerollDraft", (slotIndex) => {
+    // slotIndex: 0 hoặc 1 (con muốn đổi)
+    if (gameState.mode !== "RANDOM_DRAFT") return;
+
+    const turn = gameState.turnQueue[gameState.turnIndex];
+    if (!turn || turn.action !== "PICK") return;
+
+    // Check đúng lượt
+    const teamUsers = gameState.users.filter((u) => u.team === turn.team);
+    const activeUser = teamUsers[turn.memberIndex];
+
+    if (activeUser && activeUser.id === socket.id) {
+      // Check đã reroll chưa
+      if (gameState.rerollsUsed[socket.id]) return;
+
+      const currentOpts = gameState.draftOptions[socket.id];
+      if (!currentOpts || currentOpts.length < 2) return;
+
+      // Logic: Giữ con không bị chọn, random con mới thay thế con kia
+      const keepHero = currentOpts[slotIndex === 0 ? 1 : 0]; // Nếu đổi 0 thì giữ 1
+      const newHeroArr = generateDraftOptions(socket.id, [keepHero]); // Truyền keepHero vào để hàm biết nó đang tồn tại
+
+      // newHeroArr sẽ trả về 1 con mới
+      if (newHeroArr.length > 0) {
+        const finalOpts =
+          slotIndex === 0
+            ? [newHeroArr[0], keepHero]
+            : [keepHero, newHeroArr[0]];
+        gameState.draftOptions[socket.id] = finalOpts;
+        gameState.rerollsUsed[socket.id] = true;
+        io.emit("updateState", gameState);
+      }
+    }
+  });
+
   socket.on("selectHero", (data) => {
-    let heroName = data;
-    let targetId = null;
-    if (typeof data === "object") {
-      heroName = data.hero;
-      targetId = data.targetId;
-    }
+    // data có thể là string (tên Hero - STANDARD)
+    // hoặc object { hero: name, targetId: id } (FUN MODE cũ)
+    // Với RANDOM_DRAFT, data là tên Hero chọn từ Option
 
-    const user = gameState.users.find((u) => u.id === socket.id);
-    if (!user) return;
+    const turn = gameState.turnQueue[gameState.turnIndex];
+    if (!turn) return;
 
-    if (gameState.mode === "STANDARD") {
-      // --- LOGIC STANDARD ---
-      const currentTurn = gameState.turnQueue[gameState.turnIndex];
-      if (!currentTurn) return;
-      if (user.team !== currentTurn.team) return;
+    let heroName = typeof data === "string" ? data : data.hero;
 
-      const teamUsers = gameState.users.filter((u) => u.team === user.team);
-      if (
-        !teamUsers[currentTurn.memberIndex] ||
-        teamUsers[currentTurn.memberIndex].id !== user.id
-      )
-        return;
+    // Check user hiện tại
+    const teamUsers = gameState.users.filter((u) => u.team === turn.team);
+    const activeUser = teamUsers[turn.memberIndex];
 
-      if (currentTurn.action === "BAN") {
-        if (!gameState.bans.includes(heroName)) {
-          gameState.bans.push(heroName);
-          nextTurn();
+    if (!activeUser || activeUser.id !== socket.id) return;
+
+    if (turn.action === "BAN") {
+      if (!gameState.bans.includes(heroName)) {
+        gameState.bans.push(heroName);
+        gameState.turnIndex++;
+        checkTurn();
+        io.emit("updateState", gameState);
+      }
+    } else if (turn.action === "PICK") {
+      // Validate
+      if (gameState.mode === "STANDARD") {
+        if (
+          !gameState.bans.includes(heroName) &&
+          !Object.values(gameState.picks).includes(heroName)
+        ) {
+          gameState.picks[socket.id] = heroName;
+          gameState.turnIndex++;
+          checkTurn();
+          io.emit("updateState", gameState);
         }
-      } else if (currentTurn.action === "PICK") {
-        const isPicked = Object.values(gameState.picks).includes(heroName);
-        const isBanned = gameState.bans.includes(heroName);
-        if (!isBanned && !isPicked) {
-          gameState.picks[user.id] = heroName;
-          user.hero = heroName;
-          nextTurn();
+      } else if (gameState.mode === "RANDOM_DRAFT") {
+        const opts = gameState.draftOptions[socket.id];
+        if (opts && opts.includes(heroName)) {
+          gameState.picks[socket.id] = heroName;
+          gameState.turnIndex++;
+          checkTurn();
+          io.emit("updateState", gameState);
         }
       }
-    } else {
-      // --- LOGIC FUN ---
-      const currentTurn = gameState.turnQueue[gameState.turnIndex];
-      if (!currentTurn) return;
-      if (user.team !== currentTurn.team) return;
-
-      const teamUsers = gameState.users.filter((u) => u.team === user.team);
-      if (
-        !teamUsers[currentTurn.memberIndex] ||
-        teamUsers[currentTurn.memberIndex].id !== user.id
-      )
-        return;
-
-      gameState.funPicks[targetId] = heroName;
-      if (!gameState.completedFunPicks.includes(user.id)) {
-        gameState.completedFunPicks.push(user.id);
-      }
-      nextTurn();
     }
-  });
-
-  function nextTurn() {
-    gameState.turnIndex++;
-    io.emit("updateState", gameState);
-  }
-
-  socket.on("finalizeFunMode", () => {
-    gameState.users.forEach((u) => {
-      if (gameState.funPicks[u.id]) u.hero = gameState.funPicks[u.id];
-    });
-    gameState.phase = "RESULT";
-    io.emit("updateState", gameState);
   });
 
   socket.on("reset", () => {
-    resetToLobby(false);
-  });
-
-  socket.on("setMode", () => {
-    gameState.mode = gameState.mode === "STANDARD" ? "FUN" : "STANDARD";
+    gameState.phase = "LOBBY";
+    gameState.bans = [];
+    gameState.picks = {};
+    gameState.mapVotes = {};
+    gameState.turnQueue = [];
+    gameState.turnIndex = 0;
+    gameState.draftOptions = {};
+    gameState.rerollsUsed = {};
     io.emit("updateState", gameState);
   });
 
   socket.on("disconnect", () => {
-    const user = gameState.users.find((u) => u.id === socket.id);
-    if (user) {
-      console.log(`User ${user.name} disconnected (Waiting for reconnect...)`);
-      // QUAN TRỌNG: Không dòng code xóa user ở đây (gameState.users = filter...)
-      // Chúng ta giữ nguyên user trong mảng để họ quay lại.
+    const u = gameState.users.find((u) => u.id === socket.id);
+    if (u) {
+      u.active = false;
+      // setTimeout(() => {
+      //   gameState.users = gameState.users.filter(x => x.id !== socket.id);
+      //   io.emit('updateState', gameState);
+      // }, 5000);
     }
-    // Không cần emit updateState nếu không muốn giao diện bị nháy
   });
 });
 
-const PORT = 3000;
-server.listen(PORT, "0.0.0.0", () => {
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`http://localhost:3000/?admin=true`);
 });

@@ -259,13 +259,13 @@ body {
   gap: 8px;
 }
 
-/* PLAYER CARD - FULL BACKGROUND */
+/* PLAYER CARD */
 .player-card {
-  height: 80px; /* Tăng chiều cao để nhìn rõ hơn */
-  background: #222; /* Màu nền dự phòng */
+  height: 80px;
+  background: #222;
   border-left: 4px solid #555;
   background-size: cover;
-  background-position: center top; /* Căn agent vào giữa mặt */
+  background-position: center top;
   position: relative;
   display: flex;
   align-items: flex-end;
@@ -273,18 +273,14 @@ body {
 }
 .player-info {
   width: 100%;
-  background: linear-gradient(
-    to top,
-    rgba(0, 0, 0, 0.9),
-    transparent
-  ); /* Gradient text dễ đọc */
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
   padding: 5px 10px;
   font-weight: bold;
   font-size: 1.1rem;
   text-shadow: 1px 1px 2px black;
 }
 
-/* CENTER GRID - ẢNH TO & CĂN CHỈNH */
+/* CENTER GRID - UPDATE LAYOUT CHO SCROLL */
 .center-column {
   flex: 1;
   display: flex;
@@ -293,16 +289,27 @@ body {
   padding: 10px;
   background: rgba(20, 20, 20, 0.7);
   position: relative;
+  overflow: hidden;
 }
+
+#standard-ui {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .hero-grid-display {
   display: grid;
-  /* Tăng kích thước tối thiểu từ 60px lên 100px */
   grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 15px;
   width: 100%;
   max-width: 900px;
   padding: 20px;
+  flex: 1; /* Chiếm hết phần còn lại để scroll */
   overflow-y: auto;
+  min-height: 0;
 }
 
 /* ITEM GRID */
@@ -310,8 +317,8 @@ body {
   aspect-ratio: 1;
   border: 1px solid #444;
   cursor: pointer;
-  background-size: cover; /* Ảnh full ô */
-  background-position: center top; /* Căn vào mặt agent */
+  background-size: cover;
+  background-position: center top;
   transition: 0.1s;
   position: relative;
   overflow: hidden;
@@ -330,8 +337,6 @@ body {
   opacity: 0.2;
   pointer-events: none;
 }
-
-/* TÊN AGENT BÊN DƯỚI */
 .hero-name-label {
   position: absolute;
   bottom: 0;
@@ -345,14 +350,150 @@ body {
   text-transform: uppercase;
 }
 
-.lock-btn {
-  width: 200px;
-  margin-top: 10px;
-  font-size: 1.2rem;
-  box-shadow: 0 0 15px rgba(255, 70, 85, 0.4);
+/* FILTER BAR & LOCK BUTTON */
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 10px;
+  border-radius: 5px;
+  flex-shrink: 0;
 }
 
-/* MODAL */
+.filter-group {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.filter-btn {
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid #555;
+  color: #aaa;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 0.8rem;
+  transition: 0.2s;
+  text-transform: uppercase;
+}
+
+.filter-btn:hover {
+  border-color: var(--white);
+  color: var(--white);
+}
+
+.filter-btn.active {
+  background: var(--red);
+  color: white;
+  border-color: var(--red);
+  box-shadow: 0 0 10px rgba(255, 70, 85, 0.5);
+}
+
+.lock-btn {
+  min-width: 140px;
+  height: 36px;
+  font-size: 1rem;
+  margin-left: 15px;
+  box-shadow: 0 0 10px rgba(255, 70, 85, 0.4);
+}
+
+/* --- RANDOM DRAFT UI --- */
+#draft-ui {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+}
+
+#draft-cards-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.draft-card {
+  width: 220px;
+  height: 350px;
+  background: #222;
+  border: 2px solid #555;
+  position: relative;
+  transition: 0.3s;
+}
+
+.draft-card.clickable {
+  cursor: pointer;
+  border-color: var(--white);
+}
+
+.draft-card.clickable:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
+}
+
+.draft-card-bg {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center top;
+}
+
+.draft-card-name {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  padding: 10px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.draft-or-text {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #777;
+}
+
+/* NÚT REROLL (XOAY LẠI) */
+.reroll-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  border: 1px solid #555;
+  transition: 0.2s;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.reroll-btn:hover {
+  background: var(--red);
+  transform: rotate(180deg);
+}
+
+/* MODAL & OTHERS */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -387,13 +528,11 @@ body {
   background: #555;
   border-color: white;
 }
-/* Hiệu ứng người đang đến lượt pick */
 .picking-active {
   box-shadow: 0 0 15px #fc0;
   border-left: 4px solid #fc0;
   animation: pulse 1.5s infinite;
 }
-
 @keyframes pulse {
   0% {
     box-shadow: 0 0 10px #fc0;

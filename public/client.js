@@ -4,50 +4,52 @@ let currentGameState = null;
 let selectedHeroTemp = null;
 let myTeam = null;
 
-// --- TẠO TOKEN ĐỊNH DANH THIẾT BỊ ---
-// Token này sẽ đi theo trình duyệt này mãi mãi, không đổi khi F5
+// --- TOKEN ---
 let deviceToken = localStorage.getItem("device_token");
 if (!deviceToken) {
   deviceToken = "token_" + Math.random().toString(36).substr(2) + Date.now();
   localStorage.setItem("device_token", deviceToken);
 }
 
-// Check Admin
 const urlParams = new URLSearchParams(window.location.search);
 const isAdmin = urlParams.get("admin") === "true";
 
-const HEROES = [
-  "Jett",
-  "Reyna",
-  "Omen",
-  "Sova",
-  "Sage",
-  "Phoenix",
-  "Killjoy",
-  "Cypher",
-  "Brimstone",
-  "Viper",
-  "Raze",
-  "Breach",
-  "Skye",
-  "Yoru",
-  "Astra",
-  "KayO",
-  "Chamber",
-  "Neon",
-  "Fade",
-  "Harbor",
-  "Gekko",
-  "Deadlock",
-  "Iso",
-  "Clove",
-  "Veto",
-  "Vise",
-  "Waylay",
-  "Tejo",
+// --- HERO DATA (Client dùng để lấy Role cho filter) ---
+const HERO_DATA = [
+  { name: "Astra", role: "Controller" },
+  { name: "Brimstone", role: "Controller" },
+  { name: "Clove", role: "Controller" },
+  { name: "Harbor", role: "Controller" },
+  { name: "Omen", role: "Controller" },
+  { name: "Viper", role: "Controller" },
+  { name: "Iso", role: "Duelist" },
+  { name: "Jett", role: "Duelist" },
+  { name: "Neon", role: "Duelist" },
+  { name: "Phoenix", role: "Duelist" },
+  { name: "Raze", role: "Duelist" },
+  { name: "Reyna", role: "Duelist" },
+  { name: "Yoru", role: "Duelist" },
+  { name: "Waylay", role: "Duelist" },
+  { name: "Breach", role: "Initiator" },
+  { name: "Fade", role: "Initiator" },
+  { name: "Gekko", role: "Initiator" },
+  { name: "KayO", role: "Initiator" },
+  { name: "Skye", role: "Initiator" },
+  { name: "Sova", role: "Initiator" },
+  { name: "Tejo", role: "Initiator" },
+  { name: "Chamber", role: "Sentinel" },
+  { name: "Cypher", role: "Sentinel" },
+  { name: "Deadlock", role: "Sentinel" },
+  { name: "Killjoy", role: "Sentinel" },
+  { name: "Sage", role: "Sentinel" },
+  { name: "Vise", role: "Sentinel" },
+  { name: "Veto", role: "Sentinel" },
 ];
+HERO_DATA.sort((a, b) => a.name.localeCompare(b.name));
 
+let currentFilter = "ALL";
 const fileCache = {};
+
 function getImageUrl(folder, name, callback) {
   if (!name) return;
   const cacheKey = `${folder}/${name}`;
@@ -82,40 +84,28 @@ function setElementBg(element, folder, name) {
 // --- SOCKET EVENTS ---
 socket.on("connect", () => {
   myId = socket.id;
-
-  // Tự động Reconnect với Token
   const savedName = localStorage.getItem("valorant_username");
   if (savedName) {
-    console.log("Auto reconnecting as", savedName);
-    // Gửi cả tên và token lên server
     socket.emit("join", { name: savedName, token: deviceToken });
-    // Tạm ẩn login screen
     document.getElementById("login-screen").classList.add("hidden");
   }
 });
-
-socket.on("joinError", (message) => {
-  alert(message); // Hiện thông báo lỗi
-  document.getElementById("login-screen").classList.remove("hidden"); // Hiện lại bảng nhập tên
-  localStorage.removeItem("valorant_username"); // Xóa tên cũ đi để nhập lại
+socket.on("joinError", (msg) => {
+  alert(msg);
+  document.getElementById("login-screen").classList.remove("hidden");
 });
-
 socket.on("updateState", (state) => {
   currentGameState = state;
   renderApp(state);
 });
-
-socket.on("forceReload", () => {
-  window.location.reload();
-});
+socket.on("renameSuccess", (n) => localStorage.setItem("valorant_username", n));
+socket.on("renameError", (m) => alert(m));
 
 function joinGame() {
   const name = document.getElementById("username").value;
   if (name) {
     localStorage.setItem("valorant_username", name);
-    // Gửi object { name, token } thay vì chỉ gửi string name
     socket.emit("join", { name: name, token: deviceToken });
-    document.getElementById("login-screen").classList.add("hidden");
   }
 }
 function joinTeam(t) {
@@ -130,57 +120,87 @@ function startMapVote() {
 function finishMapVote() {
   if (isAdmin) socket.emit("finishMapVote");
 }
-function finalizeFun() {
-  if (isAdmin) socket.emit("finalizeFunMode");
-}
 function resetGame() {
   if (isAdmin) socket.emit("reset");
 }
 function toggleMode() {
   if (isAdmin) socket.emit("setMode");
 }
+function changeName() {
+  const newName = prompt("Nhập tên mới:");
+  if (newName) socket.emit("rename", newName.trim());
+}
+
+// --- LOGIC MỚI CHO RANDOM DRAFT ---
+function rerollDraft(slotIndex) {
+  socket.emit("rerollDraft", slotIndex);
+}
+
+function selectDraftHero(heroName) {
+  if (confirm(`Chọn ${heroName}?`)) {
+    socket.emit("selectHero", heroName);
+  }
+}
+
+function setFilter(role) {
+  currentFilter = role;
+  document.querySelectorAll(".filter-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.role === role);
+  });
+  if (currentGameState) {
+    // Chỉ render lại grid nếu đang ở Standard Mode
+    if (currentGameState.mode === "STANDARD") {
+      const me = currentGameState.users.find((u) => u.id === myId);
+      const turn = currentGameState.turnQueue[currentGameState.turnIndex];
+      let isMyTurn = false;
+      if (turn && me && me.team === turn.team) {
+        const teamUsers = currentGameState.users.filter(
+          (u) => u.team === turn.team
+        );
+        if (
+          teamUsers[turn.memberIndex] &&
+          teamUsers[turn.memberIndex].id === myId
+        )
+          isMyTurn = true;
+      }
+      renderHeroGrid(currentGameState, isMyTurn);
+    }
+  }
+}
 
 function renderApp(state) {
-  ["login-screen", "lobby-screen", "vote-screen", "game-screen"].forEach(
-    (id) => {
-      document.getElementById(id).classList.add("hidden");
-    }
+  ["login-screen", "lobby-screen", "vote-screen", "game-screen"].forEach((id) =>
+    document.getElementById(id).classList.add("hidden")
   );
-
   if (!myId) {
     document.getElementById("login-screen").classList.remove("hidden");
     return;
   }
 
-  // Login Check
   const me = state.users.find((u) => u.id === myId);
   if (!me) {
     document.getElementById("login-screen").classList.remove("hidden");
     return;
   }
 
-  // --- ẨN/HIỆN NÚT ADMIN ---
-  // Tìm các thành phần chỉ Admin mới được thấy
-  const lobbyControls = document.querySelector("#lobby-screen .top-controls");
+  // Admin controls
+  const adminControls = document.getElementById("admin-controls");
   const voteControls = document.querySelector("#vote-screen .bottom-bar");
   const gameResetBtn = document.querySelector(
     "#game-screen .btn-outline.danger"
-  ); // Nút Reset
-  const gameFinalizeBtn = document.getElementById("finalize-btn"); // Nút Công bố
+  );
 
   if (!isAdmin) {
-    if (lobbyControls) lobbyControls.classList.add("hidden");
+    if (adminControls) adminControls.classList.add("hidden");
     if (voteControls) voteControls.classList.add("hidden");
     if (gameResetBtn) gameResetBtn.classList.add("hidden");
-    // Nút finalizeBtn sẽ được xử lý logic riêng bên dưới
   } else {
-    if (lobbyControls) lobbyControls.classList.remove("hidden");
+    if (adminControls) adminControls.classList.remove("hidden");
     if (voteControls) voteControls.classList.remove("hidden");
     if (gameResetBtn) gameResetBtn.classList.remove("hidden");
   }
 
   if (state.phase === "LOBBY") {
-    selectedHeroTemp = null;
     document.body.style.backgroundImage = `url("https://media.valorant-api.com/maps/2bee0dc9-4ffe-519b-1cbd-7fbe763a6047/splash.png")`;
     document.getElementById("lobby-screen").classList.remove("hidden");
     document.getElementById("mode-btn").innerText = "MODE: " + state.mode;
@@ -199,42 +219,36 @@ function renderLobby(users) {
   const aList = document.getElementById("attack-list");
   dList.innerHTML = "";
   aList.innerHTML = "";
-
-  const sortedUsers = [...users].sort(
-    (a, b) => (a.teamJoinTime || 0) - (b.teamJoinTime || 0)
-  );
-  sortedUsers.forEach((u) => {
-    const li = document.createElement("li");
-    li.innerText = u.name;
-    if (u.team === "defend") dList.appendChild(li);
-    else if (u.team === "attack") aList.appendChild(li);
-  });
+  users
+    .sort((a, b) => (a.teamJoinTime || 0) - (b.teamJoinTime || 0))
+    .forEach((u) => {
+      const li = document.createElement("li");
+      li.innerText = u.name;
+      if (u.team === "defend") dList.appendChild(li);
+      else if (u.team === "attack") aList.appendChild(li);
+    });
 }
 
 function renderMapVote(votes) {
-  const container = document.getElementById("map-list");
-  container.innerHTML = "";
+  const c = document.getElementById("map-list");
+  c.innerHTML = "";
   for (const [map, count] of Object.entries(votes)) {
-    const div = document.createElement("div");
-    div.className = "map-card";
-    setElementBg(div, "maps", map);
-    div.innerHTML = `<span>${map}: ${count}</span>`;
-
-    // Chỉ cho click vote nếu KHÔNG phải admin (Admin chỉ nhìn và bấm chốt)
-    // Hoặc nếu bạn muốn Admin cũng được vote thì bỏ if (!isAdmin) đi.
-    // Theo yêu cầu của bạn "Giao diện server để trộn team, bắt đầu...", tôi sẽ để Admin click thì không tính vote, hoặc vẫn tính tuỳ bạn.
-    // Ở đây tôi cho phép Admin vote luôn nếu muốn test.
-    div.onclick = () => socket.emit("voteMap", map);
-
-    container.appendChild(div);
+    const d = document.createElement("div");
+    d.className = "map-card";
+    setElementBg(d, "maps", map);
+    d.innerHTML = `<span>${map}: ${count}</span>`;
+    d.onclick = () => socket.emit("voteMap", map);
+    c.appendChild(d);
   }
 }
 
 function renderGame(state) {
   document.getElementById("map-name").innerText = state.selectedMap;
   const info = document.getElementById("phase-info");
-  const heroGridContainer = document.getElementById("hero-grid");
-  const finalizeBtn = document.getElementById("finalize-btn");
+
+  // UI Containers
+  const standardContainer = document.getElementById("standard-ui");
+  const draftContainer = document.getElementById("draft-ui");
   const lockBtn = document.getElementById("lock-in-btn");
 
   const me = state.users.find((u) => u.id === myId);
@@ -242,35 +256,16 @@ function renderGame(state) {
   let isMyTurn = false;
   let actionText = "WAITING...";
 
-  // Logic hiển thị nút Finalize (Công bố) - Chỉ Admin mới thấy nút này
-  if (
-    state.mode !== "STANDARD" &&
-    !state.turnQueue[state.turnIndex] &&
-    state.phase !== "RESULT"
-  ) {
-    // Hết lượt Fun mode -> Chờ công bố
-    if (isAdmin) finalizeBtn.classList.remove("hidden");
-    else finalizeBtn.classList.add("hidden");
-  } else {
-    finalizeBtn.classList.add("hidden");
-  }
-
-  lockBtn.classList.add("hidden");
-
   const turn = state.turnQueue[state.turnIndex];
+  let activeUserId = null;
+
   if (turn) {
-    const turnTeamUsers = state.users.filter((u) => u.team === turn.team);
-    const activeUser = turnTeamUsers[turn.memberIndex];
+    const teamUsers = state.users.filter((u) => u.team === turn.team);
+    const activeUser = teamUsers[turn.memberIndex];
     const activeName = activeUser ? activeUser.name : "...";
+    activeUserId = activeUser ? activeUser.id : null;
 
-    if (state.mode === "STANDARD") {
-      actionText = `${turn.team.toUpperCase()} - ${
-        turn.action
-      } (${activeName})`;
-    } else {
-      actionText = `GÁN TƯỚNG CHO ĐỐI THỦ (${activeName})`;
-    }
-
+    actionText = `${turn.team.toUpperCase()} - ${turn.action} (${activeName})`;
     if (activeUser && activeUser.id === myId) {
       isMyTurn = true;
       actionText += " (BẠN)";
@@ -278,124 +273,214 @@ function renderGame(state) {
     info.innerText = `LƯỢT: ${actionText}`;
     info.style.color =
       turn.team === "attack" ? "var(--red)" : "var(--defend-color)";
-
-    if (isMyTurn) {
-      if (state.mode === "STANDARD" && selectedHeroTemp) {
-        lockBtn.classList.remove("hidden");
-        lockBtn.innerText = turn.action === "BAN" ? "CẤM NGAY" : "KHOÁ CHỌN";
-        lockBtn.className =
-          turn.action === "BAN"
-            ? "btn-warning lock-btn"
-            : "btn-primary lock-btn";
-      }
-    }
   } else {
-    // HẾT LƯỢT
-    if (state.mode === "STANDARD") info.innerText = "HOÀN TẤT";
-    else {
-      info.innerText = state.phase === "RESULT" ? "KẾT QUẢ" : "CHỜ CÔNG BỐ...";
-    }
+    info.innerText = "KẾT QUẢ";
   }
 
-  // --- CHỈNH SỬA: Admin luôn thấy Grid Tướng để quan sát (nhưng không click chọn được cho người khác) ---
-  // Hoặc theo yêu cầu "chỉ người chơi mới pick", thì Admin không cần thấy Grid cũng được.
-  // Ở đây giữ logic cũ: Chỉ người có lượt mới thấy Grid để chọn.
-  if (state.phase === "RESULT") {
-    heroGridContainer.classList.add("hidden");
-  } else {
-    if (isMyTurn) {
-      heroGridContainer.classList.remove("hidden");
-      renderHeroGrid(state, isMyTurn);
-    } else {
-      heroGridContainer.classList.add("hidden");
-      // Nếu là Admin, có thể hiện grid dạng view-only nếu muốn, nhưng hiện tại cứ ẩn cho gọn
-      heroGridContainer.innerHTML = `<div class="waiting-message">VUI LÒNG CHỜ...</div>`;
-    }
-  }
-
+  // Handle Result Phase Background
   if (state.picks[myId]) {
     getImageUrl("agents", state.picks[myId], (url) => {
       document.body.style.backgroundImage = `url('${url}')`;
       document.body.style.backgroundPosition = "center top";
-      document.body.style.backgroundRepeat = "no-repeat";
-      document.body.style.backgroundSize = "cover";
     });
   }
 
-  const leftBan = document.getElementById("ban-list-left");
-  const rightBan = document.getElementById("ban-list-right");
-  leftBan.innerHTML = "";
-  rightBan.innerHTML = "";
-  state.bans.forEach((hero, index) => {
-    const div = document.createElement("div");
-    div.className = "ban-slot";
-    setElementBg(div, "agents", hero);
-    if (index % 2 === 0) leftBan.appendChild(div);
-    else rightBan.appendChild(div);
+  // --- RENDER LOGIC THEO MODE ---
+
+  // 1. Nếu là Ban phase: Luôn hiện grid (ẩn filter nếu muốn, hoặc hiện filter để dễ ban)
+  if (turn && turn.action === "BAN") {
+    standardContainer.classList.remove("hidden");
+    draftContainer.classList.add("hidden");
+    renderHeroGrid(state, isMyTurn); // Render grid để Ban
+    if (isMyTurn) lockBtn.innerText = "CẤM NGAY";
+  }
+  // 2. Nếu là Pick phase
+  else {
+    if (state.mode === "STANDARD") {
+      standardContainer.classList.remove("hidden");
+      draftContainer.classList.add("hidden");
+      if (state.phase !== "RESULT") renderHeroGrid(state, isMyTurn);
+      else standardContainer.classList.add("hidden"); // Kết quả thì ẩn grid
+    } else if (state.mode === "RANDOM_DRAFT") {
+      // Ẩn Standard UI
+      standardContainer.classList.add("hidden");
+
+      if (state.phase !== "RESULT") {
+        draftContainer.classList.remove("hidden");
+        // Render 2 thẻ bài draft
+        renderDraftUI(state, activeUserId, isMyTurn);
+      } else {
+        draftContainer.classList.add("hidden");
+      }
+    }
+  }
+
+  // Render danh sách ban
+  const lb = document.getElementById("ban-list-left");
+  const rb = document.getElementById("ban-list-right");
+  lb.innerHTML = "";
+  rb.innerHTML = "";
+  state.bans.forEach((h, i) => {
+    const d = document.createElement("div");
+    d.className = "ban-slot";
+    setElementBg(d, "agents", h);
+    if (i % 2 === 0) lb.appendChild(d);
+    else rb.appendChild(d);
   });
 
-  renderTeamSide("defend", state, state.turnQueue[state.turnIndex]);
-  renderTeamSide("attack", state, state.turnQueue[state.turnIndex]);
+  renderTeamSide("defend", state, turn);
+  renderTeamSide("attack", state, turn);
+}
+
+function renderDraftUI(state, activeUserId, isMyTurn) {
+  const container = document.getElementById("draft-cards-container");
+  container.innerHTML = "";
+
+  const options = state.draftOptions[activeUserId];
+  if (!options || options.length === 0) {
+    container.innerHTML =
+      "<div class='waiting-message'>ĐANG TẠO DỮ LIỆU...</div>";
+    return;
+  }
+
+  const hasRerolled = state.rerollsUsed[activeUserId];
+
+  options.forEach((hero, index) => {
+    const card = document.createElement("div");
+    card.className = "draft-card";
+
+    // Background Image
+    const bg = document.createElement("div");
+    bg.className = "draft-card-bg";
+    setElementBg(bg, "agents", hero);
+    card.appendChild(bg);
+
+    // Name
+    const name = document.createElement("div");
+    name.className = "draft-card-name";
+    name.innerText = hero;
+    card.appendChild(name);
+
+    // Controls (Chỉ hiện nếu là lượt của mình)
+    if (isMyTurn) {
+      // Nút Chọn (Toàn bộ card click để chọn)
+      card.onclick = (e) => {
+        // Nếu click vào nút reroll thì không chọn
+        if (e.target.closest(".reroll-btn")) return;
+        selectDraftHero(hero);
+      };
+
+      card.classList.add("clickable");
+
+      // Nút Reroll (Góc trên thẻ)
+      if (!hasRerolled) {
+        const rrBtn = document.createElement("button");
+        rrBtn.className = "reroll-btn";
+        rrBtn.innerHTML = "↻"; // Icon reload
+        rrBtn.title = "Đổi tướng này (Chỉ 1 lần)";
+        rrBtn.onclick = (e) => {
+          e.stopPropagation();
+          rerollDraft(index);
+        };
+        card.appendChild(rrBtn);
+      }
+    } else {
+      // Người xem
+      card.style.opacity = "0.8";
+    }
+
+    container.appendChild(card);
+
+    // Thêm chữ "OR" ở giữa
+    if (index === 0 && options.length > 1) {
+      const or = document.createElement("div");
+      or.className = "draft-or-text";
+      or.innerText = "VS";
+      container.appendChild(or);
+    }
+  });
+
+  // Thông báo trạng thái reroll
+  const statusDiv = document.getElementById("draft-status");
+  if (isMyTurn) {
+    statusDiv.innerText = hasRerolled
+      ? "ĐÃ SỬ DỤNG QUYỀN ĐỔI"
+      : "BẠN CÓ 1 LẦN ĐỔI (BẤM VÀO NÚT TRÊN GÓC ẢNH)";
+    statusDiv.style.color = hasRerolled ? "#aaa" : "#4da6ff";
+  } else {
+    statusDiv.innerText = "ĐANG SUY NGHĨ...";
+    statusDiv.style.color = "#aaa";
+  }
 }
 
 function renderTeamSide(team, state, currentTurn) {
   const container = document.getElementById(`${team}-display`);
   container.innerHTML = "";
-  const teamUsers = state.users.filter((u) => u.team === team);
+  state.users
+    .filter((u) => u.team === team)
+    .forEach((u, idx) => {
+      const div = document.createElement("div");
+      div.className = "player-card";
 
-  teamUsers.forEach((u, index) => {
-    const div = document.createElement("div");
-    div.className = "player-card";
+      if (
+        state.mode &&
+        currentTurn &&
+        currentTurn.team === team &&
+        currentTurn.memberIndex === idx
+      ) {
+        div.classList.add("picking-active");
+      } else {
+        div.classList.remove("picking-active");
+      }
 
-    if (
-      state.mode === "STANDARD" &&
-      currentTurn &&
-      currentTurn.team === team &&
-      currentTurn.memberIndex === index
-    ) {
-      div.classList.add("picking-active");
-    } else {
-      div.classList.remove("picking-active");
-    }
-
-    let heroDisplay = "";
-    if (state.mode === "STANDARD") {
+      let heroDisplay = "";
+      // Cả 2 chế độ đều lưu vào picks
       if (state.picks[u.id]) heroDisplay = state.picks[u.id];
-    } else {
-      if (state.phase === "RESULT") heroDisplay = u.hero;
-      else if (state.funPicks[u.id]) heroDisplay = "LOCKED";
-    }
 
-    if (heroDisplay && heroDisplay !== "LOCKED") {
-      setElementBg(div, "agents", heroDisplay);
-      div.style.backgroundColor = "transparent";
-    } else if (heroDisplay === "LOCKED") {
-      div.style.backgroundColor = "#111";
-    }
-    div.innerHTML = `<div class="player-info"><span>${u.name}</span></div>`;
-    container.appendChild(div);
-  });
+      if (heroDisplay) {
+        setElementBg(div, "agents", heroDisplay);
+        div.style.backgroundColor = "transparent";
+      }
+      div.innerHTML = `<div class="player-info"><span>${u.name}</span></div>`;
+      container.appendChild(div);
+    });
 }
 
 function renderHeroGrid(state, isMyTurn) {
   const grid = document.getElementById("hero-grid");
   grid.innerHTML = "";
-  HEROES.forEach((hero) => {
+  const lockBtn = document.getElementById("lock-in-btn");
+
+  if (!isMyTurn) {
+    lockBtn.classList.add("hidden");
+    grid.innerHTML = `<div class="waiting-message">VUI LÒNG CHỜ...</div>`;
+    return;
+  }
+
+  // FILTER
+  const filteredHeroes = HERO_DATA.filter((h) => {
+    if (currentFilter === "ALL") return true;
+    return h.role === currentFilter;
+  });
+
+  filteredHeroes.forEach((heroObj) => {
+    const hero = heroObj.name;
     const div = document.createElement("div");
     div.className = "hero-select-item";
     setElementBg(div, "agents", hero);
     div.innerHTML = `<div class="hero-name-label">${hero}</div>`;
+
     const isBanned = state.bans.includes(hero);
     const isPicked = Object.values(state.picks).includes(hero);
-    if (state.mode === "STANDARD" && (isBanned || isPicked)) {
-      div.classList.add("disabled");
-    }
+    if (isBanned || isPicked) div.classList.add("disabled");
+
     if (selectedHeroTemp === hero) div.classList.add("selected");
-    if (isMyTurn && !div.classList.contains("disabled")) {
+
+    if (!div.classList.contains("disabled")) {
       div.onclick = () => {
         selectedHeroTemp = hero;
-        if (state.mode === "STANDARD") renderGame(state);
-        else showEnemySelector(hero, state);
+        renderHeroGrid(state, isMyTurn); // Re-render border
+        lockBtn.classList.remove("hidden");
       };
     }
     grid.appendChild(div);
@@ -408,51 +493,3 @@ function confirmStandardSelection() {
     selectedHeroTemp = null;
   }
 }
-
-function showEnemySelector(hero, state) {
-  const modal = document.getElementById("enemy-selector-modal");
-  const list = document.getElementById("enemy-list");
-  list.innerHTML = "";
-  const enemies = state.users.filter((u) => u.team !== myTeam);
-  enemies.forEach((enemy) => {
-    const btn = document.createElement("div");
-    btn.className = "enemy-btn";
-    const isAssigned = state.funPicks[enemy.id];
-    if (isAssigned) {
-      btn.innerText = `${enemy.name} (Đã có)`;
-      btn.style.opacity = "0.5";
-      btn.style.pointerEvents = "none";
-    } else {
-      btn.innerText = `Gán cho: ${enemy.name}`;
-      btn.onclick = () => {
-        socket.emit("selectHero", { hero: hero, targetId: enemy.id });
-        closeEnemyModal();
-        selectedHeroTemp = null;
-      };
-    }
-    list.appendChild(btn);
-  });
-  modal.classList.remove("hidden");
-}
-
-function closeEnemyModal() {
-  document.getElementById("enemy-selector-modal").classList.add("hidden");
-  selectedHeroTemp = null;
-  if (currentGameState) renderGame(currentGameState);
-}
-function changeName() {
-  const newName = prompt("Nhập tên mới của bạn:");
-  if (newName && newName.trim() !== "") {
-    socket.emit("rename", newName.trim());
-  }
-}
-
-// Khi đổi tên thành công -> Lưu ngay vào bộ nhớ để lần sau vào lại không bị sai
-socket.on("renameSuccess", (newName) => {
-  localStorage.setItem("valorant_username", newName);
-});
-
-// Khi có lỗi (trùng tên)
-socket.on("renameError", (msg) => {
-  alert(msg);
-});

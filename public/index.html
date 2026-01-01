@@ -29,12 +29,16 @@
 
         <div id="lobby-screen" class="full-screen hidden">
           <div class="top-controls">
-            <button id="mode-btn" class="btn-outline" onclick="toggleMode()">
-              MODE: STANDARD
+            <button class="btn-secondary" onclick="changeName()">
+              ĐỔI TÊN
             </button>
-            <div class="actions">
-              <button class="btn-secondary" onclick="changeName()">
-                ĐỔI TÊN
+
+            <div
+              id="admin-controls"
+              style="display: flex; gap: 10px; align-items: center"
+            >
+              <button id="mode-btn" class="btn-outline" onclick="toggleMode()">
+                MODE: STANDARD
               </button>
               <button class="btn-secondary" onclick="randomize()">
                 TRỘN TEAM
@@ -109,14 +113,68 @@
             </div>
 
             <div class="center-column">
-              <div id="hero-grid" class="hero-grid-display"></div>
-              <button
-                id="lock-in-btn"
-                class="btn-primary lock-btn hidden"
-                onclick="confirmStandardSelection()"
-              >
-                KHOÁ CHỌN
-              </button>
+              <div id="standard-ui">
+                <div class="filter-bar">
+                  <div class="filter-group">
+                    <button
+                      class="filter-btn active"
+                      data-role="ALL"
+                      onclick="setFilter('ALL')"
+                    >
+                      ALL
+                    </button>
+                    <button
+                      class="filter-btn"
+                      data-role="Duelist"
+                      onclick="setFilter('Duelist')"
+                    >
+                      DUELIST
+                    </button>
+                    <button
+                      class="filter-btn"
+                      data-role="Initiator"
+                      onclick="setFilter('Initiator')"
+                    >
+                      INITIATOR
+                    </button>
+                    <button
+                      class="filter-btn"
+                      data-role="Controller"
+                      onclick="setFilter('Controller')"
+                    >
+                      CONTROLLER
+                    </button>
+                    <button
+                      class="filter-btn"
+                      data-role="Sentinel"
+                      onclick="setFilter('Sentinel')"
+                    >
+                      SENTINEL
+                    </button>
+                  </div>
+                  <button
+                    id="lock-in-btn"
+                    class="btn-primary lock-btn hidden"
+                    onclick="confirmStandardSelection()"
+                  >
+                    KHOÁ CHỌN
+                  </button>
+                </div>
+                <div id="hero-grid" class="hero-grid-display"></div>
+              </div>
+
+              <div id="draft-ui" class="hidden">
+                <h2
+                  style="margin-bottom: 20px; color: #aaa; letter-spacing: 2px"
+                >
+                  CHỌN 1 TRONG 2
+                </h2>
+                <div id="draft-cards-container"></div>
+                <div
+                  id="draft-status"
+                  style="margin-top: 20px; font-weight: bold; font-size: 1.2rem"
+                ></div>
+              </div>
             </div>
 
             <div class="team-column attack-side">
@@ -127,7 +185,7 @@
 
           <div id="enemy-selector-modal" class="modal-overlay hidden">
             <div class="modal-box small-box">
-              <h3>CHỌN ĐỐI THỦ ĐỂ GÁN AGENT:</h3>
+              <h3>CHỌN ĐỐI THỦ:</h3>
               <div id="enemy-list" class="enemy-grid"></div>
               <button class="btn-secondary" onclick="closeEnemyModal()">
                 HỦY
